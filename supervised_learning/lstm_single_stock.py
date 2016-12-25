@@ -92,7 +92,7 @@ def make_network(look_back, batch_size):
     return net
 
 
-def train_network(net, epochs, train, valid):
+def train_network(net, epochs, train, valid, asset):
     """
     Run training for epochs iterations
     train: tuple of (data, target)
@@ -105,7 +105,7 @@ def train_network(net, epochs, train, valid):
               validation_set=({'input': valid[0]}, {'target': valid[1]}),
               show_metric=True, shuffle=False)
 
-    model.save('lstm3.tflearn')
+    model.save("lstm3_" + asset + ".tflearn")
 
     return model
 
@@ -189,18 +189,10 @@ def read_from_csv(sheet):
     data = pandas.read_csv(sheet)
     return data["CLOSE"][0:5000]
 
- 
-
-epochs = 2
-split = (0.8, 0.1, 0.1)
-use_csv = True
-look_back = 250
-look_ahead = 1
-train = True
-if __name__ == "__main__":
+def generate_supervised_network(csv_file, asset):
     if use_csv:
         #TODO don't use absolute path
-        df = read_from_csv("/Users/deep/development/deep_portfolio/data/NIFTY_sort.csv")
+        df = read_from_csv(csv_file)
     else:
        start = datetime.datetime(1990, 1, 1)
        end = datetime.datetime(2016, 10, 28)
@@ -208,27 +200,19 @@ if __name__ == "__main__":
        df = data['Adj Close']
 
     # set batch parameters
-    if train:
+    if should_train_network:
         # set tensor flow params, including random seed
-        train, valid, test, train_scale, valid_scale, test_scale = prepare_data(df, look_back, look_ahead,
-                                                                            n_aug=10, scale=0.1, split=split)
+        train, valid, test, train_scale, valid_scale, test_scale = prepare_data(df, look_back, look_ahead, n_aug=10, scale=0.1, split=split)
         # set tensor flow params, including random seed
         tfl.config.init_graph(seed=765, log_device=False, num_cores=0, gpu_memory_fraction=0, soft_placement=True)
 
         # create network and train it
         net = make_network(look_back, batch_size=train[0].shape[0]/50)
-        model = train_network(net, epochs, train, valid)
+        model = train_network(net, epochs, train, valid, asset)
 
         # calculate errors
         predicted, testY_scaled, errors = forecast_one(model, train, valid, test,
                                                    train_scale, valid_scale, test_scale)
-
-        #df = forecast_recursive(model, testX, n_ahead=look_back + 1)
-        #print df.tail(30)
-        #print predicted
-
-        #plot_result(predicted, testY_scaled)
-        # confusion matrix on direction of forecast
 
         print "DEEP METRICS, PLEASE IGNORE:"
         #TODO -- double check below logic
@@ -241,5 +225,17 @@ if __name__ == "__main__":
         print('Recall    %.3f' % (result["recall"]))
         print('\nConfusion Matrix')
         print result["confusion_matrix"]
+ 
+
+epochs = 2
+split = (0.8, 0.1, 0.1)
+use_csv = True
+look_back = 250
+look_ahead = 1
+should_train_network = True
+csv_file = "/Users/deep/development/deep_portfolio/data/NIFTY_sort.csv"
+asset = "NIFTY_sort"
+if __name__ == "__main__":
+    generate_supervised_network(csv_file, asset)
 
     #the trading model code can be copied later
