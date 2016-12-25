@@ -7,6 +7,7 @@ from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import ipdb
+from tensormetrics_helper import tf_metrics
 import csv
 import pandas
 
@@ -137,7 +138,6 @@ def forecast_one(model, train, valid, test,
     print ("Mean Absolue Error (MAE) train: %f" % mse1)
     print ("Mean Absolue Error (MAE) valid: %f" % mse2)
     print ("Mean Absolue Error (MAE) test:  %f" % mse3)
-
     return predicted, testY, (mse1, mse2, mse3)
 
 
@@ -227,35 +227,13 @@ if __name__ == "__main__":
         #print df.tail(30)
         #print predicted
 
-        plot_result(predicted, testY_scaled)
-        scaled = testY_scaled
-        normalised = predicted
-        train_size = int(df.shape[0] * split[0])
-        valid_size = int(df.shape[0] * split[1])
-        test_size = df.shape[0] - train_size - valid_size
-        df_true = df.tail(test_size - look_back).shift(look_ahead).dropna()
-        df_pred = pd.DataFrame({'price_pred': scaled[0],
-                            'price_true': df_true.values,
-                            'norm_pred': normalised[0],
-                            'norm_true': normalised[1].ravel()}, index=df_true.index)
+        #plot_result(predicted, testY_scaled)
         # confusion matrix on direction of forecast
-        true_dir = np.sign(test[1] - test[0][:, -1])
-        pred_dir = np.sign(scaled[0] - test[0][:, -1, 0])
-        cm = confusion_matrix(true_dir, pred_dir)
-        accuracy = (cm.diagonal())/(cm.astype(float).sum())
-        iu = np.triu_indices(cm.shape[0], k=1)
-        il = np.tril_indices(cm.shape[0], k=-1)
-        off_diag = (cm[iu] + cm[il])/(cm.astype(float).sum())
-
-        print "\n--- Confusion Matrix for direction of forecasts ---"
-        print cm
-        print "accuracy {}".format(accuracy)
-        print "off_diag {}".format(off_diag)
-
 
         print "DEEP METRICS, PLEASE IGNORE:"
-        true = np.where((test[1] - test[0][:, -1])<= 0, 0, 1)
-        predicted = np.where((scaled[0] - test[0][:, -1, 0])<= 0, 0, 1)
+        #TODO -- double check below logic
+        true = np.where((testY_scaled[1:] - testY_scaled[:-1])<= 0, 0, 1)
+        predicted = np.where((predicted[1:] - testY_scaled[:-1])<= 0, 0, 1)
         result = tf_metrics(true, predicted)
         print "\n--- out of sample stats ---"
         print('Accuracy  %.3f' % (result["accuracy"]))
