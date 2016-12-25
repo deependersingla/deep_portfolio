@@ -14,10 +14,13 @@ from dateutil.relativedelta import relativedelta
 import collections
 import datetime
 import dateutil.parser
-#input: times series csv of different assets and columns
-#assumptions: all have same column format
-#output log returns on then
+
 def export_time_series_data(files, usecols=6):
+	'''
+	input: times series csv of different assets and columns
+	assumptions: all have same column format
+	output log returns on then
+	'''
 	header = []
 	data_dict = {}
 	keys_dict = {}
