@@ -12,8 +12,8 @@ import ipdb
 import numpy as np
 from dateutil.relativedelta import relativedelta
 import collections
-
-
+import datetime
+import dateutil.parser
 #input: times series csv of different assets and columns
 #assumptions: all have same column format
 #output log returns on then
@@ -30,13 +30,25 @@ def export_time_series_data(files, usecols=6):
 	keys_dict = {} #free memory
 	super_dict = collections.defaultdict(list)
 	for file in files:
+		header += [file + "_" + str(s) for s in np.arange(usecols)]
 		values = data_dict[file]
 		d = dict((k, values[k]) for k in whitelisted_keys if k in values)
 		for k, v in d.iteritems():
 			v = v[2:]
-			super_dict[k].append(v)
+			v = v.astype(np.float)
+			super_dict[k] += v.tolist()
+	new_file_name = "all_data.csv"
+	whitelisted_keys = sorted(whitelisted_keys, key=lambda x: dateutil.parser.parse(x))
+	with open(new_file_name, 'wb') as outfile:
+		writer = csv.writer(outfile)
+		writer.writerow(header)
+		for row in whitelisted_keys:
+			k = row
+			v = super_dict[k]
+			temp = [k] + v
+			writer.writerow(temp)
 	return super_dict
 
 if __name__ == '__main__':
 	files = ["NIFTY_sort.csv", "NIFTY_F1_sort.csv"]
-	export_time_series_data(files)
+	export_time_series_data(files,6)
