@@ -7,7 +7,7 @@ from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import ipdb
-from tensormetrics_helper import tf_metrics
+from tensor_helpers.tensormetrics_helper import tf_metrics
 import csv
 import pandas
 
@@ -88,7 +88,9 @@ def make_network(look_back, batch_size):
 
     net = tfl.fully_connected(net, 1, activation='linear', name='Linear')
     net = tfl.regression(net, batch_size=batch_size, optimizer='adam', learning_rate=0.005, loss='mean_square', name='target')
-
+    col = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+    for x in col:
+        tf.add_to_collection(tf.GraphKeys.VARIABLES, x ) 
     return net
 
 
@@ -104,7 +106,6 @@ def train_network(net, epochs, train, valid, asset):
     model.fit({'input': train[0]}, {'target': train[1]}, n_epoch=epochs,
               validation_set=({'input': valid[0]}, {'target': valid[1]}),
               show_metric=True, shuffle=False)
-
     model.save("lstm3_" + asset + ".tflearn")
 
     return model
@@ -209,7 +210,7 @@ def generate_supervised_network(csv_file, asset):
         tfl.config.init_graph(seed=765, log_device=False, num_cores=0, gpu_memory_fraction=0, soft_placement=True)
 
         # create network and train it
-        net = make_network(look_back, batch_size=train[0].shape[0]/50)
+        net = make_network(look_back, batch_size=500)
         model = train_network(net, epochs, train, valid, asset)
 
         # calculate errors
@@ -238,7 +239,7 @@ use_csv = True
 look_back = 250
 look_ahead = 1
 should_train_network = True
-csv_file = ["/Users/deep/development/deep_portfolio/data/NIFTY_sort.csv", "/Users/deep/development/deep_portfolio/data/NIFTY_F1_sort.csv"]
+csv_file = ["data/NIFTY_sort.csv", "data/NIFTY_F1_sort.csv"]
 if __name__ == "__main__":
     for file in csv_file:
         asset = file.split("/")[-1]
