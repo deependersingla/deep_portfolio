@@ -164,6 +164,8 @@ def caculate_error(df, look_back, look_ahead):
     return mse1, mse2, mse3
 
 
+
+
 def plot_result(predicted, testY):
     # plot results
     plot_predicted, = plt.plot(predicted, label='predicted', color='red')
@@ -173,10 +175,10 @@ def plot_result(predicted, testY):
     plt.legend(handles=[plot_predicted, plot_test])
     plt.show()
 
-def load_model_tflearn(look_back, batch_size):
+def load_model_tflearn(look_back, batch_size, asset):
     net = make_network(look_back, batch_size)
     model = tfl.DNN(net, tensorboard_dir="./logs_tb", tensorboard_verbose=0)
-    model.load('lstm3.tflearn')
+    model.load("lstm3_" + asset + ".tflearn")
     return model
 
 def forecast_model(data, model, test_sd, test_mean):
@@ -214,6 +216,8 @@ def generate_supervised_network(csv_file, asset):
         predicted, testY_scaled, errors = forecast_one(model, train, valid, test,
                                                    train_scale, valid_scale, test_scale)
 
+        #plot_result(predicted, testY_scaled)
+
         print "DEEP METRICS, PLEASE IGNORE:"
         #TODO -- double check below logic
         true = np.where((testY_scaled[1:] - testY_scaled[:-1])<= 0, 0, 1)
@@ -225,6 +229,7 @@ def generate_supervised_network(csv_file, asset):
         print('Recall    %.3f' % (result["recall"]))
         print('\nConfusion Matrix')
         print result["confusion_matrix"]
+        clean_up(net, model)
  
 
 epochs = 2
@@ -233,9 +238,10 @@ use_csv = True
 look_back = 250
 look_ahead = 1
 should_train_network = True
-csv_file = "/Users/deep/development/deep_portfolio/data/NIFTY_sort.csv"
-asset = "NIFTY_sort"
+csv_file = ["/Users/deep/development/deep_portfolio/data/NIFTY_sort.csv", "/Users/deep/development/deep_portfolio/data/NIFTY_F1_sort.csv"]
 if __name__ == "__main__":
-    generate_supervised_network(csv_file, asset)
+    for file in csv_file:
+        asset = file.split("/")[-1]
+        generate_supervised_network(file, asset)
 
     #the trading model code can be copied later
