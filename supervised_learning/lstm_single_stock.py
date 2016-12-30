@@ -106,7 +106,7 @@ def train_network(net, epochs, train, valid, asset):
     model.fit({'input': train[0]}, {'target': train[1]}, n_epoch=epochs,
               validation_set=({'input': valid[0]}, {'target': valid[1]}),
               show_metric=True, shuffle=False)
-    model.save("lstm3_" + asset + ".tflearn")
+    model.save("networks/lstm3_" + asset + ".tflearn")
 
     return model
 
@@ -179,7 +179,7 @@ def plot_result(predicted, testY):
 def load_model_tflearn(look_back, batch_size, asset):
     net = make_network(look_back, batch_size)
     model = tfl.DNN(net, tensorboard_dir="./logs_tb", tensorboard_verbose=0)
-    model.load("lstm3_" + asset + ".tflearn")
+    model.load("networks/lstm3_" + asset + ".tflearn")
     return model
 
 def forecast_model(data, model, test_sd, test_mean):
@@ -190,7 +190,7 @@ def forecast_model(data, model, test_sd, test_mean):
 
 def read_from_csv(sheet):
     data = pandas.read_csv(sheet)
-    return data["CLOSE"][0:300000]
+    return data["CLOSE"][0:5000]
 
 def generate_supervised_network(csv_file, asset):
     if use_csv:
@@ -210,7 +210,7 @@ def generate_supervised_network(csv_file, asset):
         tfl.config.init_graph(seed=765, log_device=False, num_cores=0, gpu_memory_fraction=0, soft_placement=True)
 
         # create network and train it
-        net = make_network(look_back, batch_size=50)
+        net = make_network(look_back, batch_size=batch_size)
         model = train_network(net, epochs, train, valid, asset)
 
         # calculate errors
@@ -233,16 +233,18 @@ def generate_supervised_network(csv_file, asset):
         clean_up(net, model)
  
 
-epochs = 50
+epochs = 1
 split = (0.8, 0.1, 0.1)
 use_csv = True
-look_back = 500
+look_back = 200
 look_ahead = 1
 should_train_network = True
+batch_size = 50
 csv_file = ["data/NIFTY_sort.csv"]
 if __name__ == "__main__":
     for file in csv_file:
         asset = file.split("/")[-1]
+        asset =  asset.replace(".csv",'')
         generate_supervised_network(file, asset)
 
     #the trading model code can be copied later
