@@ -101,7 +101,7 @@ def train_network(net, epochs, train, valid, asset):
     valid: tuple of (data, target)
     """
     # declare model
-    model = tfl.DNN(net, tensorboard_dir="./logs_tb", tensorboard_verbose=2)
+    model = tfl.DNN(net, tensorboard_dir="./logs_tb", tensorboard_verbose=0)
     # Train model
     model.fit({'input': train[0]}, {'target': train[1]}, n_epoch=epochs,
               validation_set=({'input': valid[0]}, {'target': valid[1]}),
@@ -190,7 +190,7 @@ def forecast_model(data, model, test_sd, test_mean):
 
 def read_from_csv(sheet):
     data = pandas.read_csv(sheet)
-    return data["CLOSE"][0:5000]
+    return data["CLOSE"][0:300000]
 
 def generate_supervised_network(csv_file, asset):
     if use_csv:
@@ -210,7 +210,7 @@ def generate_supervised_network(csv_file, asset):
         tfl.config.init_graph(seed=765, log_device=False, num_cores=0, gpu_memory_fraction=0, soft_placement=True)
 
         # create network and train it
-        net = make_network(look_back, batch_size=500)
+        net = make_network(look_back, batch_size=50)
         model = train_network(net, epochs, train, valid, asset)
 
         # calculate errors
@@ -233,13 +233,13 @@ def generate_supervised_network(csv_file, asset):
         clean_up(net, model)
  
 
-epochs = 2
+epochs = 50
 split = (0.8, 0.1, 0.1)
 use_csv = True
-look_back = 250
+look_back = 500
 look_ahead = 1
 should_train_network = True
-csv_file = ["data/NIFTY_sort.csv", "data/NIFTY_F1_sort.csv"]
+csv_file = ["data/NIFTY_sort.csv"]
 if __name__ == "__main__":
     for file in csv_file:
         asset = file.split("/")[-1]
