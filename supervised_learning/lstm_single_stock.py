@@ -240,7 +240,7 @@ look_back = 200
 look_ahead = 1
 should_train_network = True
 batch_size = 50
-csv_file = ["data/NIFTY_sort.csv"]
+csv_file = ["data/NIFTY_sort.csv", "data/NIFTY_F1_sort.csv"]
 if __name__ == "__main__":
     for file in csv_file:
         asset = file.split("/")[-1]
