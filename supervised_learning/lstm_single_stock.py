@@ -68,7 +68,8 @@ def prepare_data(df, look_back=20, look_ahead=1, n_aug=10, scale=0.1, split=(0.6
 
 def prepare_data_for_trading_model(data, look_back):
     #todo rewrite code to support look_ahead with None
-    test_mean, test_sd, testX, testY = create_timeseries_dataset(data, look_back=look_back, look_ahead=1)
+    ipdb.set_trace();
+    test_mean, test_sd, testX, testY = create_timeseries_dataset(data, look_back=look_back, look_ahead=0)
     return test_mean, test_sd, testX, testY
 
 
@@ -178,6 +179,17 @@ def forecast_model(data, model, test_sd, test_mean):
 def read_from_csv(sheet):
     data = pandas.read_csv(sheet)
     return data["CLOSE"][0:5000]
+
+def run_real_time(data, model, look_back):
+    window = data[-look_back:]
+    mean = window.mean()
+    sd = window.std()
+    # rescale entire window
+    window = (window - mean) / sd
+    input_data = window.reshape(1,look_back,1)
+    value = model.predict(input_data)
+    return value[0][0]*sd+mean
+
 
 def generate_supervised_network(csv_file, asset):
     if use_csv:
