@@ -15,6 +15,7 @@ from supervised_learning.lstm_single_stock import load_model_tflearn
 def make_asset_input(assets, look_back, look_ahead, batch_size):
 	models = []
 	for asset in assets:
+		#with tf.Graph().as_default() as asset:
 		model = load_model_tflearn(look_back, batch_size, asset)
 		models.append(model)
 		tf.reset_default_graph()

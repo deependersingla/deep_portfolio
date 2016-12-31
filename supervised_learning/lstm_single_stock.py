@@ -10,6 +10,7 @@ import ipdb
 from tensor_helpers.tensormetrics_helper import tf_metrics
 import csv
 import pandas
+import os
 
 def create_timeseries_dataset(X, look_back, look_ahead):
     """
@@ -101,12 +102,15 @@ def train_network(net, epochs, train, valid, asset):
     valid: tuple of (data, target)
     """
     # declare model
-    model = tfl.DNN(net, tensorboard_dir="./logs_tb", tensorboard_verbose=0)
+    model = tfl.DNN(net, tensorboard_dir="./logs_tb", tensorboard_verbose=3)
     # Train model
     model.fit({'input': train[0]}, {'target': train[1]}, n_epoch=epochs,
               validation_set=({'input': valid[0]}, {'target': valid[1]}),
               show_metric=True, shuffle=False)
-    model.save("networks/lstm3_" + asset + ".tflearn")
+    directory = "networks/" + asset
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    model.save(directory + "/lstm3.tflearn")
 
     return model
 
@@ -148,23 +152,6 @@ def clean_up(net, model):
     del net
     tf.reset_default_graph()
 
-def caculate_error(df, look_back, look_ahead):
-    train, valid, test, train_scale, valid_scale, test_scale = prepare_data(df, look_back, look_ahead, n_aug=10, scale=0.1, split=split)
-    # set tensor flow params, including random seed
-    tfl.config.init_graph(seed=765, log_device=False, num_cores=0, gpu_memory_fraction=0, soft_placement=True)
-
-    # create network and train it
-    net = make_network(look_back, batch_size=train[0].shape[0]/2)
-    model = train_network(net, epochs, train, valid)
-
-    # calculate errors
-    predicted, testY_scaled, (mse1, mse2, mse3) = forecast_one(model, train, valid, test,
-                                                   train_scale, valid_scale, test_scale)
-    clean_up(net, model)
-
-    return mse1, mse2, mse3
-
-
 
 
 def plot_result(predicted, testY):
@@ -179,7 +166,7 @@ def plot_result(predicted, testY):
 def load_model_tflearn(look_back, batch_size, asset):
     net = make_network(look_back, batch_size)
     model = tfl.DNN(net, tensorboard_dir="./logs_tb", tensorboard_verbose=0)
-    model.load("networks/lstm3_" + asset + ".tflearn")
+    model.load("networks/" + asset + "/lstm3.tflearn")
     return model
 
 def forecast_model(data, model, test_sd, test_mean):
@@ -207,7 +194,7 @@ def generate_supervised_network(csv_file, asset):
         # set tensor flow params, including random seed
         train, valid, test, train_scale, valid_scale, test_scale = prepare_data(df, look_back, look_ahead, n_aug=10, scale=0.1, split=split)
         # set tensor flow params, including random seed
-        tfl.config.init_graph(seed=765, log_device=False, num_cores=0, gpu_memory_fraction=0, soft_placement=True)
+        tfl.config.init_graph(seed=765)
 
         # create network and train it
         net = make_network(look_back, batch_size=batch_size)
