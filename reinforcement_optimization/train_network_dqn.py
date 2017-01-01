@@ -52,29 +52,31 @@ init = tf.initialize_all_variables()
 y = .99
 e = 0.1
 num_episodes = 2000
-episode_length = 3#20
+episode_length = 300
 #create lists to contain total rewards and steps per episode
 jList = []
 rList = []
 with tf.Session() as sess:
     sess.run(init)
-    env = EquityEnvironment(assets,look_back)
-    for i in range(num_episodes):
+    env = EquityEnvironment(assets,look_back, episode_length)
+    for episode in range(num_episodes):
+        print("episode is: " + str(episode))
         #Reset environment and get first new observation
-        s = env.get_initial_state()
+        s = env.get_initial_state(episode)
         rAll = 0
         d = False
         j = 0
         #The Q-Network
-        while j < episode_length:
+        while j < episode_length*2:
             j+=1
             #Choose an action by greedily (with e chance of random action) from the Q-network
 
+            index = episode + j
             a,allQ = sess.run([predict,Qout],feed_dict={inputs1:s})
             if np.random.rand(1) < e:
                 a[0] = random.choice(env.gym_actions)
             #Get new state and reward from environment
-            s1,r,d,_ = env.step(a[0],j)
+            s1,r,d,_ = env.step(a[0],index)
             #Obtain the Q' values by feeding the new state through our network
             Q1 = sess.run(Qout,feed_dict={inputs1:s})
             #Obtain maxQ' and set our target value for chosen action.
@@ -87,11 +89,11 @@ with tf.Session() as sess:
             s = s1
             if d == True:
                 #Reduce chance of random action as we train the model.
-                e = 1./((i/50) + 10)
+                e = 1./((episode/50) + 10)
                 break
         jList.append(j)
         rList.append(rAll)
-        print(jList)
-        print(rList)
+        #print(jList)
+        #print(rList)
 
 

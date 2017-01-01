@@ -24,7 +24,7 @@ class EquityEnvironment(object):
     Responsible for preprocessing screens and holding on to a screen buffer
     of size action_repeat from which environment state is constructed.
     """
-    def __init__(self, assets, look_back):
+    def __init__(self, assets, look_back, episode_length):
         #think about it whether its needed or not
         self.action_repeat = 2
 
@@ -42,18 +42,17 @@ class EquityEnvironment(object):
         self.batch_size = 50
         #self.portfolio = range(len(assets)+1)
         self.portfolio = 0.0
-        #episode length will be 300
-        self.episode_length = 300
+        self.episode_length = episode_length
         self.models = make_asset_input(assets, look_back, self.look_ahead, self.batch_size)
         self.state_buffer = deque()
 
-    def get_initial_state(self):
+    def get_initial_state(self, index):
         """
         Resets the atari game, clears the state buffer.
         """
         # Clear the state buffer
         self.state_buffer = deque()
-        x_t = self.get_preprocessed_frame(0)
+        x_t = self.get_preprocessed_frame(index)
         #s_t = np.stack([x_t for i in range(self.action_repeat)], axis=0)
 
         #for i in range(self.action_repeat-1):
@@ -94,7 +93,7 @@ class EquityEnvironment(object):
         the state buffer. Returns current state.
         """
 
-        if index == self.episode_length:
+        if (index % self.episode_length == 0) and (index != 0):
             terminal = True
         else:
             terminal = False
