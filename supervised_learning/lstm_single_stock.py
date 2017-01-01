@@ -68,7 +68,6 @@ def prepare_data(df, look_back=20, look_ahead=1, n_aug=10, scale=0.1, split=(0.6
 
 def prepare_data_for_trading_model(data, look_back):
     #todo rewrite code to support look_ahead with None
-    ipdb.set_trace();
     test_mean, test_sd, testX, testY = create_timeseries_dataset(data, look_back=look_back, look_ahead=0)
     return test_mean, test_sd, testX, testY
 

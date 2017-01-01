@@ -80,11 +80,14 @@ class EquityEnvironment(object):
         """
 
         #TODO need to be updated
-        reward = np.random.rand(1)
-        info = 434
+        reward = 5
+        info = 0
         return reward, info
     
-
+    
+    def random_sample_actions(self):
+        return np.random.dirichlet(np.ones(len(self.gym_actions)),size=1)
+    
     def step(self, action, index):
         """
         Excecutes an action in the Equity environment.

@@ -38,7 +38,7 @@ tf.reset_default_graph()
 inputs1 = tf.placeholder(shape=[1,num_inputs],dtype=tf.float32)
 W = tf.Variable(tf.random_uniform([num_inputs,num_actions],0,0.01))
 Qout = tf.matmul(inputs1,W)
-predict = tf.argmax(Qout,1)
+predict = tf.nn.softmax(Qout)
 
 #Below we obtain the loss by taking the sum of squares difference between the target and prediction Q values.
 nextQ = tf.placeholder(shape=[1,num_actions],dtype=tf.float32)
@@ -74,15 +74,16 @@ with tf.Session() as sess:
             index = episode + j
             a,allQ = sess.run([predict,Qout],feed_dict={inputs1:s})
             if np.random.rand(1) < e:
-                a[0] = random.choice(env.gym_actions)
+                a = env.random_sample_actions()
             #Get new state and reward from environment
-            s1,r,d,_ = env.step(a[0],index)
+            s1,r,d,_ = env.step(a,index)
             #Obtain the Q' values by feeding the new state through our network
             Q1 = sess.run(Qout,feed_dict={inputs1:s})
             #Obtain maxQ' and set our target value for chosen action.
-            maxQ1 = np.max(Q1)
+            #TODO this need to be updated
+            maxQ1 = Q1
             targetQ = allQ
-            targetQ[0,a[0]] = r + y*maxQ1
+            targetQ = r + y*maxQ1
             #Train our network using target and predicted Q values
             _,W1 = sess.run([updateModel,W],feed_dict={inputs1:s,nextQ:targetQ})
             rAll += r
