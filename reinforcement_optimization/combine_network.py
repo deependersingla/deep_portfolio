@@ -36,7 +36,7 @@ should_train_network = True
 assets = ["NIFTY_F1_sort", "NIFTY_sort"]
 batch_size = 50
 if __name__ == "__main__":
-    models = make_asset_input(assets, look_back, look_ahead, batch_size)
+    #models = make_asset_input(assets, look_back, look_ahead, batch_size)
     #data = pandas.read_csv("data/NIFTY_sort.csv")
     #data = data["CLOSE"]
     #value = get_data_from_model(models[0],data)
