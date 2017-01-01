@@ -9,9 +9,16 @@ from skimage.color import rgb2gray
 from collections import deque
 
 import gym
-import tensorflow as tf
 import tflearn
-import equity_environment
+from equity_environment import *
+import numpy as np
+import ipdb
+import tensorflow as tf
+
+assets = ["NIFTY_F1_sort", "NIFTY_sort"]
+num_inputs = len(assets) + 1
+num_actions = num_inputs
+look_back = 200
 
 # Fix for TF 0.12
 try:
@@ -25,354 +32,66 @@ except Exception:
     histogram_summary = tf.histogram_summary
     scalar_summary = tf.scalar_summary
 
-# Change that value to test instead of train
-testing = False
-# Model path (to load when testing)
-test_model_path = '/networks/qlearning.tflearn.ckpt'
-# Atari game to learn
-# You can also try: 'Breakout-v0', 'Pong-v0', 'SpaceInvaders-v0', ...
-game = 'MsPacman-v0'
-# Learning threads
-n_threads = 8
+tf.reset_default_graph()
 
-# =============================
-#   Training Parameters
-# =============================
-# Max training steps
-TMAX = 80000000
-# Current training step
-T = 0
-# Consecutive screen frames when performing training
-action_repeat = 4
-# Async gradient update frequency of each learning thread
-I_AsyncUpdate = 5
-# Timestep to reset the target network
-I_target = 40000
-# Learning rate
-learning_rate = 0.001
-# Reward discount rate
-gamma = 0.99
-# Number of timesteps to anneal epsilon
-anneal_epsilon_timesteps = 400000
+#These lines establish the feed-forward part of the network used to choose actions
+inputs1 = tf.placeholder(shape=[1,num_inputs],dtype=tf.float32)
+W = tf.Variable(tf.random_uniform([num_inputs,num_actions],0,0.01))
+Qout = tf.matmul(inputs1,W)
+predict = tf.argmax(Qout,1)
 
-# =============================
-#   Utils Parameters
-# =============================
-# Display or not gym evironment screens
-show_training = True
-# Directory for storing tensorboard summaries
-summary_dir = '/tmp/tflearn_logs/'
-summary_interval = 100
-checkpoint_path = 'qlearning.tflearn.ckpt'
-checkpoint_interval = 2000
-# Number of episodes to run gym evaluation
-num_eval_episodes = 100
+#Below we obtain the loss by taking the sum of squares difference between the target and prediction Q values.
+nextQ = tf.placeholder(shape=[1,num_actions],dtype=tf.float32)
+loss = tf.reduce_sum(tf.square(nextQ - Qout))
+trainer = tf.train.GradientDescentOptimizer(learning_rate=0.1)
+updateModel = trainer.minimize(loss)
 
+init = tf.initialize_all_variables()
 
-# =============================
-#   TFLearn Deep Q Network
-# =============================
-def build_dqn(num_actions, action_repeat):
-    """
-    Building a DQN.
-    """
-    inputs = tf.placeholder(tf.float32, [None, action_repeat, 84, 84])
-    # Inputs shape: [batch, channel, height, width] need to be changed into
-    # shape [batch, height, width, channel]
-    net = tf.transpose(inputs, [0, 2, 3, 1])
-    net = tflearn.conv_2d(net, 32, 8, strides=4, activation='relu')
-    net = tflearn.conv_2d(net, 64, 4, strides=2, activation='relu')
-    net = tflearn.fully_connected(net, 256, activation='relu')
-    q_values = tflearn.fully_connected(net, num_actions)
-    return inputs, q_values
+# Set learning parameters
+y = .99
+e = 0.1
+num_episodes = 2000
+episode_length = 3#20
+#create lists to contain total rewards and steps per episode
+jList = []
+rList = []
+with tf.Session() as sess:
+    sess.run(init)
+    env = EquityEnvironment(assets,look_back)
+    for i in range(num_episodes):
+        #Reset environment and get first new observation
+        s = env.get_initial_state()
+        rAll = 0
+        d = False
+        j = 0
+        #The Q-Network
+        while j < episode_length:
+            j+=1
+            #Choose an action by greedily (with e chance of random action) from the Q-network
 
-
-# =============================
-#   1-step Q-Learning
-# =============================
-def sample_final_epsilon():
-    """
-    Sample a final epsilon value to anneal towards from a distribution.
-    These values are specified in section 5.1 of http://arxiv.org/pdf/1602.01783v1.pdf
-    """
-    final_epsilons = np.array([.1, .01, .5])
-    probabilities = np.array([0.4, 0.3, 0.3])
-    return np.random.choice(final_epsilons, 1, p=list(probabilities))[0]
-
-
-def actor_learner_thread(thread_id, env, session, graph_ops, num_actions,
-                         summary_ops, saver):
-    """
-    Actor-learner thread implementing asynchronous one-step Q-learning, as specified
-    in algorithm 1 here: http://arxiv.org/pdf/1602.01783v1.pdf.
-    """
-    global TMAX, T
-
-    # Unpack graph ops
-    s = graph_ops["s"]
-    q_values = graph_ops["q_values"]
-    st = graph_ops["st"]
-    target_q_values = graph_ops["target_q_values"]
-    reset_target_network_params = graph_ops["reset_target_network_params"]
-    a = graph_ops["a"]
-    y = graph_ops["y"]
-    grad_update = graph_ops["grad_update"]
-
-    summary_placeholders, assign_ops, summary_op = summary_ops
-
-    # Wrap env with EquityEnvironment helper class
-    env = EquityEnvironment(gym_env=env,
-                           action_repeat=action_repeat)
-
-    # Initialize network gradients
-    s_batch = []
-    a_batch = []
-    y_batch = []
-
-    final_epsilon = sample_final_epsilon()
-    initial_epsilon = 1.0
-    epsilon = 1.0
-
-    print("Thread " + str(thread_id) + " - Final epsilon: " + str(final_epsilon))
-
-    time.sleep(3*thread_id)
-    t = 0
-    while T < TMAX:
-        # Get initial game observation
-        s_t = env.get_initial_state()
-        terminal = False
-
-        # Set up per-episode counters
-        ep_reward = 0
-        episode_ave_max_q = 0
-        ep_t = 0
-
-        while True:
-            # Forward the deep q network, get Q(s,a) values
-            readout_t = q_values.eval(session=session, feed_dict={s: [s_t]})
-
-            # Choose next action based on e-greedy policy
-            a_t = np.zeros([num_actions])
-            if random.random() <= epsilon:
-                action_index = random.randrange(num_actions)
-            else:
-                action_index = np.argmax(readout_t)
-            a_t[action_index] = 1
-
-            # Scale down epsilon
-            if epsilon > final_epsilon:
-                epsilon -= (initial_epsilon - final_epsilon) / anneal_epsilon_timesteps
-
-            # Gym excecutes action in game environment on behalf of actor-learner
-            s_t1, r_t, terminal, info = env.step(action_index)
-
-            # Accumulate gradients
-            readout_j1 = target_q_values.eval(session = session,
-                                              feed_dict = {st : [s_t1]})
-            clipped_r_t = np.clip(r_t, -1, 1)
-            if terminal:
-                y_batch.append(clipped_r_t)
-            else:
-                y_batch.append(clipped_r_t + gamma * np.max(readout_j1))
-
-            a_batch.append(a_t)
-            s_batch.append(s_t)
-
-            # Update the state and counters
-            s_t = s_t1
-            T += 1
-            t += 1
-
-            ep_t += 1
-            ep_reward += r_t
-            episode_ave_max_q += np.max(readout_t)
-
-            # Optionally update target network
-            if T % I_target == 0:
-                session.run(reset_target_network_params)
-
-            # Optionally update online network
-            if t % I_AsyncUpdate == 0 or terminal:
-                if s_batch:
-                    session.run(grad_update, feed_dict={y: y_batch,
-                                                        a: a_batch,
-                                                        s: s_batch})
-                # Clear gradients
-                s_batch = []
-                a_batch = []
-                y_batch = []
-
-            # Save model progress
-            if t % checkpoint_interval == 0:
-                saver.save(session, "qlearning.ckpt", global_step=t)
-
-            # Print end of episode stats
-            if terminal:
-                stats = [ep_reward, episode_ave_max_q/float(ep_t), epsilon]
-                for i in range(len(stats)):
-                    session.run(assign_ops[i],
-                                {summary_placeholders[i]: float(stats[i])})
-                print("| Thread %.2i" % int(thread_id), "| Step", t,
-                      "| Reward: %.2i" % int(ep_reward), " Qmax: %.4f" %
-                      (episode_ave_max_q/float(ep_t)),
-                      " Epsilon: %.5f" % epsilon, " Epsilon progress: %.6f" %
-                      (t/float(anneal_epsilon_timesteps)))
+            a,allQ = sess.run([predict,Qout],feed_dict={inputs1:s})
+            if np.random.rand(1) < e:
+                a[0] = random.choice(env.gym_actions)
+            #Get new state and reward from environment
+            s1,r,d,_ = env.step(a[0],j)
+            #Obtain the Q' values by feeding the new state through our network
+            Q1 = sess.run(Qout,feed_dict={inputs1:s})
+            #Obtain maxQ' and set our target value for chosen action.
+            maxQ1 = np.max(Q1)
+            targetQ = allQ
+            targetQ[0,a[0]] = r + y*maxQ1
+            #Train our network using target and predicted Q values
+            _,W1 = sess.run([updateModel,W],feed_dict={inputs1:s,nextQ:targetQ})
+            rAll += r
+            s = s1
+            if d == True:
+                #Reduce chance of random action as we train the model.
+                e = 1./((i/50) + 10)
                 break
+        jList.append(j)
+        rList.append(rAll)
+        print(jList)
+        print(rList)
 
 
-def build_graph(num_actions):
-    # Create shared deep q network
-    s, q_network = build_dqn(num_actions=num_actions,
-                             action_repeat=action_repeat)
-    network_params = tf.trainable_variables()
-    q_values = q_network
-
-    # Create shared target network
-    st, target_q_network = build_dqn(num_actions=num_actions,
-                                     action_repeat=action_repeat)
-    target_network_params = tf.trainable_variables()[len(network_params):]
-    target_q_values = target_q_network
-
-    # Op for periodically updating target network with online network weights
-    reset_target_network_params = \
-        [target_network_params[i].assign(network_params[i])
-         for i in range(len(target_network_params))]
-
-    # Define cost and gradient update op
-    a = tf.placeholder("float", [None, num_actions])
-    y = tf.placeholder("float", [None])
-    action_q_values = tf.reduce_sum(tf.mul(q_values, a), reduction_indices=1)
-    cost = tflearn.mean_square(action_q_values, y)
-    optimizer = tf.train.RMSPropOptimizer(learning_rate)
-    grad_update = optimizer.minimize(cost, var_list=network_params)
-
-    graph_ops = {"s": s,
-                 "q_values": q_values,
-                 "st": st,
-                 "target_q_values": target_q_values,
-                 "reset_target_network_params": reset_target_network_params,
-                 "a": a,
-                 "y": y,
-                 "grad_update": grad_update}
-
-    return graph_ops
-
-
-# Set up some episode summary ops to visualize on tensorboard.
-def build_summaries():
-    episode_reward = tf.Variable(0.)
-    scalar_summary("Reward", episode_reward)
-    episode_ave_max_q = tf.Variable(0.)
-    scalar_summary("Qmax Value", episode_ave_max_q)
-    logged_epsilon = tf.Variable(0.)
-    scalar_summary("Epsilon", logged_epsilon)
-    # Threads shouldn't modify the main graph, so we use placeholders
-    # to assign the value of every summary (instead of using assign method
-    # in every thread, that would keep creating new ops in the graph)
-    summary_vars = [episode_reward, episode_ave_max_q, logged_epsilon]
-    summary_placeholders = [tf.placeholder("float")
-                            for i in range(len(summary_vars))]
-    assign_ops = [summary_vars[i].assign(summary_placeholders[i])
-                  for i in range(len(summary_vars))]
-    summary_op = merge_all_summaries()
-    return summary_placeholders, assign_ops, summary_op
-
-
-def get_num_actions():
-    """
-    Returns the number of possible actions for the given atari game
-    """
-    # Figure out number of actions from gym env
-    env = gym.make(game)
-    num_actions = env.action_space.n
-    return num_actions
-
-
-def train(session, graph_ops, num_actions, saver):
-    """
-    Train a model.
-    """
-
-    # Set up game environments (one per thread)
-    envs = [gym.make(game) for i in range(n_threads)]
-
-    summary_ops = build_summaries()
-    summary_op = summary_ops[-1]
-
-    # Initialize variables
-    session.run(tf.initialize_all_variables())
-    writer = writer_summary(summary_dir + "/qlearning", session.graph)
-
-    # Initialize target network weights
-    session.run(graph_ops["reset_target_network_params"])
-
-    # Start n_threads actor-learner training threads
-    actor_learner_threads = \
-        [threading.Thread(target=actor_learner_thread,
-                          args=(thread_id, envs[thread_id], session,
-                                graph_ops, num_actions, summary_ops, saver))
-         for thread_id in range(n_threads)]
-    for t in actor_learner_threads:
-        t.start()
-        time.sleep(0.01)
-
-    # Show the agents training and write summary statistics
-    last_summary_time = 0
-    while True:
-        if show_training:
-            for env in envs:
-                env.render()
-        now = time.time()
-        if now - last_summary_time > summary_interval:
-            summary_str = session.run(summary_op)
-            writer.add_summary(summary_str, float(T))
-            last_summary_time = now
-    for t in actor_learner_threads:
-        t.join()
-
-
-def evaluation(session, graph_ops, saver):
-    """
-    Evaluate a model.
-    """
-    saver.restore(session, test_model_path)
-    print("Restored model weights from ", test_model_path)
-    monitor_env = gym.make(game)
-    monitor_env.monitor.start("qlearning/eval")
-
-    # Unpack graph ops
-    s = graph_ops["s"]
-    q_values = graph_ops["q_values"]
-
-    # Wrap env with EquityEnvironment helper class
-    env = EquityEnvironment(gym_env=monitor_env,
-                           action_repeat=action_repeat)
-
-    for i_episode in xrange(num_eval_episodes):
-        s_t = env.get_initial_state()
-        ep_reward = 0
-        terminal = False
-        while not terminal:
-            monitor_env.render()
-            readout_t = q_values.eval(session=session, feed_dict={s : [s_t]})
-            action_index = np.argmax(readout_t)
-            s_t1, r_t, terminal, info = env.step(action_index)
-            s_t = s_t1
-            ep_reward += r_t
-        print(ep_reward)
-    monitor_env.monitor.close()
-
-
-def main(_):
-    with tf.Session() as session:
-        num_actions = get_num_actions()
-        graph_ops = build_graph(num_actions)
-        saver = tf.train.Saver(max_to_keep=5)
-
-        if testing:
-            evaluation(session, graph_ops, saver)
-        else:
-            train(session, graph_ops, num_actions, saver)
-
-if __name__ == "__main__":
-    tf.app.run()
