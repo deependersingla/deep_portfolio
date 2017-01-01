@@ -11,6 +11,7 @@ from collections import deque
 import gym
 import tensorflow as tf
 import tflearn
+import equity_environment
 
 # Fix for TF 0.12
 try:
@@ -119,8 +120,8 @@ def actor_learner_thread(thread_id, env, session, graph_ops, num_actions,
 
     summary_placeholders, assign_ops, summary_op = summary_ops
 
-    # Wrap env with AtariEnvironment helper class
-    env = AtariEnvironment(gym_env=env,
+    # Wrap env with EquityEnvironment helper class
+    env = EquityEnvironment(gym_env=env,
                            action_repeat=action_repeat)
 
     # Initialize network gradients
@@ -343,8 +344,8 @@ def evaluation(session, graph_ops, saver):
     s = graph_ops["s"]
     q_values = graph_ops["q_values"]
 
-    # Wrap env with AtariEnvironment helper class
-    env = AtariEnvironment(gym_env=monitor_env,
+    # Wrap env with EquityEnvironment helper class
+    env = EquityEnvironment(gym_env=monitor_env,
                            action_repeat=action_repeat)
 
     for i_episode in xrange(num_eval_episodes):
