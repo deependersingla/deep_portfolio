@@ -28,12 +28,9 @@ class EquityEnvironment(object):
         #think about it whether its needed or not
         self.action_repeat = 2
 
-        # Agent available actions, such as LEFT, RIGHT, NOOP, etc...
         self.gym_actions = range(len(assets)+1)
 
         self.look_back = look_back
-        # Screen buffer of size action_repeat to be able to build
-        # state arrays of size [1, action_repeat, 84, 84]
         self.data = pd.read_csv("data/all_data.csv")
         self.numpy_data = self.data.as_matrix()
         self.look_back = look_back
