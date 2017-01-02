@@ -24,7 +24,7 @@ class EquityEnvironment(object):
     Responsible for preprocessing screens and holding on to a screen buffer
     of size action_repeat from which environment state is constructed.
     """
-    def __init__(self, assets, look_back, episode_length):
+    def __init__(self, assets, look_back, episode_length, look_back_reinforcement, price_series):
         #think about it whether its needed or not
         self.action_repeat = 2
 
@@ -40,8 +40,9 @@ class EquityEnvironment(object):
         self.assets_index = range(0, (len(self.gym_actions))*4, 4)[1:]
         self.look_ahead = 1
         self.batch_size = 50
-        #self.portfolio = range(len(assets)+1)
-        self.portfolio = 0.0
+        self.portfolio = [0] * (len(assets)+1)
+        self.look_back_reinforcement = look_back_reinforcement
+        self.price_series = price_series
         self.episode_length = episode_length
         self.models = make_asset_input(assets, look_back, self.look_ahead, self.batch_size)
         self.state_buffer = deque()
@@ -68,7 +69,10 @@ class EquityEnvironment(object):
         for index, model in enumerate(self.models):
             value =  get_data_from_model(model, assets_data[:,index])
             x.append(value)
-        x.append(self.portfolio)
+            series_string = "ASSET_" + str(index+1) + "_CLOSE"
+            temp = self.data[series_string].pct_change()[self.look_back+index-self.look_back_reinforcement:self.look_back+index]
+            x += temp.tolist()
+        x += self.portfolio
         #x = [6161.4551648648358, 6168.7575063155873, 0.0]
         x = np.reshape(x, (1,len(x)))
         return x

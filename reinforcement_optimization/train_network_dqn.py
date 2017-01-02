@@ -16,8 +16,11 @@ import ipdb
 import tensorflow as tf
 
 assets = ["NIFTY_F1_sort", "NIFTY_sort"]
-num_inputs = len(assets) + 1
-num_actions = num_inputs
+look_back_reinforcement = 10
+#currently just taking closing price but in future we can use ohlc
+price_series = 1
+num_inputs = 2*len(assets) + look_back_reinforcement*price_series*len(assets) + 1
+num_actions = len(assets) + 1
 look_back = 200
 
 # Fix for TF 0.12
@@ -58,7 +61,7 @@ jList = []
 rList = []
 with tf.Session() as sess:
     sess.run(init)
-    env = EquityEnvironment(assets,look_back, episode_length)
+    env = EquityEnvironment(assets,look_back, episode_length, look_back_reinforcement, price_series)
     for episode in range(num_episodes):
         print("episode is: " + str(episode))
         #Reset environment and get first new observation
@@ -94,7 +97,4 @@ with tf.Session() as sess:
                 break
         jList.append(j)
         rList.append(rAll)
-        #print(jList)
-        #print(rList)
-
 
