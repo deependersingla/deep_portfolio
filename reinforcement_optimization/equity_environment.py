@@ -37,7 +37,12 @@ class EquityEnvironment(object):
         self.assets_index = range(0, (len(self.gym_actions))*4, 4)[1:]
         self.look_ahead = 1
         self.batch_size = 50
-        self.portfolio = [0] * (len(assets)+1)
+        #starting cash
+        self.initial_cash = 1000000
+        self.cash = self.initial_cash
+        #zero in all assets + 100 percent in cash
+        self.portfolio = [0] * (len(assets)) + [1]
+        self.portfolio_quantity = [0] * (len(asset))
         self.look_back_reinforcement = look_back_reinforcement
         self.price_series = price_series
         self.episode_length = episode_length
@@ -51,6 +56,7 @@ class EquityEnvironment(object):
         # Clear the state buffer
         self.state_buffer = deque()
         x_t = self.get_preprocessed_frame(index)
+        self.transaction_buffer = []
         #s_t = np.stack([x_t for i in range(self.action_repeat)], axis=0)
 
         #for i in range(self.action_repeat-1):
@@ -79,12 +85,45 @@ class EquityEnvironment(object):
         Excecutes an action in the Equity environment.
         Update Portflio and return reward
         """
-
-        #TODO need to be updated
-        reward = 5
-        info = 0
+        current_portfolio = self.portfolio
+        current_prices = current_price_of_assets(index)
+        current_holding_values = current_portfolio_value_holdings(current_prices)
+        total_value = sum(current_holding_values)
+        new_portfolio = action
+        new_portfolio_quantities, total_price = find_new_portfolio_quantity(new_portfolio, total_value, current_prices)
+        transaction_charges = 0 #assuming zero for now
+        self.portfolio_quantity = new_portfolio_quantities 
+        self.cash = self.cash + current_holding_values - total_price
+        reward = current_holding_values - self.initial_cash
         return reward, info
+
+    def current_price_of_assets(self, index):
+        current_prices = []
+        assets_price = self.numpy_data[index:self.look_back+index][:,self.assets_index] 
+        for index, asset in enumerate(self.portfolio[0:-1]):
+            current_price = assets_data[:,index][-1]
+            current_prices.append(current_price)
+        return current_prices
     
+    
+    def find_new_portfolio_quantity(new_portfolio, total_value, current_prices):
+        new_portfolio_quantities = []
+        total_price = =
+        for index, asset in enumerate(self.new_portfolio[0:-1]):
+            new_value = asset*total_value
+            quantitiy = new_value/current_prices[index]
+            total_price += new_value
+            new_portfolio_quantities.append(quantitiy)
+        return new_portfolio_quantities, total_price
+
+    def current_portfolio_value_holdings(self,current_prices):
+        current_holding_values = []
+        for index, asset in enumerate(self.portfolio_quantity):
+            current_holding_value = asset*current_prices[index]
+            current_holding_values.append(current_holding_value)
+        current_holding_values.append(self.cash)
+        return current_holding_values
+
     
     def random_sample_actions(self):
         return np.random.dirichlet(np.ones(len(self.gym_actions)),size=1)
