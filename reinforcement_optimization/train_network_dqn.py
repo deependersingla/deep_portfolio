@@ -62,10 +62,11 @@ rList = []
 with tf.Session() as sess:
     sess.run(init)
     env = EquityEnvironment(assets,look_back, episode_length, look_back_reinforcement, price_series)
+    index = 0
     for episode in range(num_episodes):
         print("episode is: " + str(episode))
         #Reset environment and get first new observation
-        s = env.get_initial_state(episode)
+        s = env.get_initial_state(index)
         rAll = 0
         d = False
         j = 0
@@ -73,8 +74,7 @@ with tf.Session() as sess:
         while j < episode_length*2:
             j+=1
             #Choose an action by greedily (with e chance of random action) from the Q-network
-
-            index = episode + j
+            index += 1
             a,allQ = sess.run([predict,Qout],feed_dict={inputs1:s})
             if np.random.rand(1) < e:
                 a = env.random_sample_actions()

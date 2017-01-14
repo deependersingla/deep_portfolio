@@ -36,18 +36,14 @@ class EquityEnvironment(object):
         self.look_back = look_back
         self.assets_index = range(0, (len(self.gym_actions))*4, 4)[1:]
         self.look_ahead = 1
-        self.batch_size = 50
-        #starting cash
-        self.initial_cash = 1000000
-        self.cash = self.initial_cash
-        #zero in all assets + 100 percent in cash
-        self.portfolio = [0] * (len(assets)) + [1]
-        self.portfolio_quantity = [0] * (len(assets))
+        self.batch_size = 50    
         self.look_back_reinforcement = look_back_reinforcement
         self.price_series = price_series
         self.episode_length = episode_length
-        #self.models = make_asset_input(assets, look_back, self.look_ahead, self.batch_size)
+        self.models = make_asset_input(assets, look_back, self.look_ahead, self.batch_size)
         self.state_buffer = deque()
+        self.assets = assets
+
 
     def get_initial_state(self, index):
         """
@@ -55,8 +51,13 @@ class EquityEnvironment(object):
         """
         # Clear the state buffer
         self.state_buffer = deque()
-        x_t = self.get_preprocessed_frame(index)
         self.transaction_buffer = []
+        self.initial_cash = 1000000
+        self.cash = self.initial_cash
+        #zero in all assets + 100 percent in cash
+        self.portfolio = [0] * (len(self.assets)) + [1]
+        self.portfolio_quantity = [0] * (len(self.assets))
+        x_t = self.get_preprocessed_frame(index)
         #s_t = np.stack([x_t for i in range(self.action_repeat)], axis=0)
 
         #for i in range(self.action_repeat-1):
@@ -68,15 +69,15 @@ class EquityEnvironment(object):
          Take step of learning and return data
         """
         x = []
+        #print(index)
         assets_data = self.numpy_data[index:self.look_back+index][:,self.assets_index]
-        # for index, model in enumerate(self.models):
-        #     value =  get_data_from_model(model, assets_data[:,index])
-        #     x.append(value)
-        #     series_string = "ASSET_" + str(index+1) + "_CLOSE"
-        #     temp = self.data[series_string].pct_change()[self.look_back+index-self.look_back_reinforcement:self.look_back+index]
-        #     x += temp.tolist()
-        #x += self.portfolio
-        x = [0.5,0,0.5,0.5,0,0.5,0.5,0,0.5,0.5,0,0.5,0.5,0,0.5,0.5,0,0.5,0.5,0,0.5,0.5,0,0.5,0.5]
+        for index, model in enumerate(self.models):
+            value =  get_data_from_model(model, assets_data[:,index])
+            x.append(value)
+            series_string = "ASSET_" + str(index+1) + "_CLOSE"
+            temp = self.data[series_string].pct_change()[self.look_back+index-self.look_back_reinforcement:self.look_back+index]
+            x += temp.tolist()
+        x += self.portfolio
         x = np.reshape(x, (1,len(x)))
         return x
     
@@ -107,11 +108,12 @@ class EquityEnvironment(object):
         current_holding_values.append(self.cash)
         return current_holding_values
 
-    def calculate_reward(self, action, index):
+    def calculate_reward(self, action, index, terminal):
         """
         Excecutes an action in the Equity environment.
         Update Portflio and return reward
         """
+        self.transaction_buffer.append(self.portfolio_quantity)
         current_portfolio = self.portfolio
         current_prices = self.current_price_of_assets(index)
         current_holding_values = self.current_portfolio_holding_value(current_prices)
@@ -120,9 +122,14 @@ class EquityEnvironment(object):
         new_portfolio_quantities, total_price = self.find_new_portfolio_quantity(new_portfolio, total_value, current_prices)
         transaction_charges = 0 #assuming zero for now
         self.portfolio_quantity = new_portfolio_quantities 
+        self.portfolio = action[0].tolist()
         self.cash = total_value - total_price
-        reward = total_value - self.initial_cash
-        print(reward)
+        #currently terminal reward only
+        if terminal:
+            reward = total_value - self.initial_cash
+            print(reward)
+        else:
+            reward = 0
         info = 0
         return reward, info
 
@@ -146,7 +153,7 @@ class EquityEnvironment(object):
 
 
 
-        r_t, info  = self.calculate_reward(action,index)
+        r_t, info  = self.calculate_reward(action,index, terminal)
         x_t1 = self.get_preprocessed_frame(index)
         s_t1 = x_t1
 
