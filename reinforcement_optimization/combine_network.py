@@ -26,6 +26,12 @@ def get_data_from_model(model, data):
 	predicted_value = run_real_time(data, model, look_back)
 	return predicted_value
 
+def get_rescaled_value_from_model(model, data):
+	try:
+		predicted_value = get_data_from_model(model, data)
+	except:
+		ipdb.set_trace();
+	return (predicted_value - data.mean())/data.std()
 
 epochs = 50
 split = (0.8, 0.1, 0.1)

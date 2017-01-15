@@ -61,12 +61,12 @@ jList = []
 rList = []
 with tf.Session() as sess:
     sess.run(init)
-    env = EquityEnvironment(assets,look_back, episode_length, look_back_reinforcement, price_series)
+    env = EquityEnvironment(assets,look_back, episode_length, look_back_reinforcement, price_series,train=True)
     index = 0
     for episode in range(num_episodes):
         print("episode is: " + str(episode))
         #Reset environment and get first new observation
-        s = env.get_initial_state(index)
+        s = env.get_initial_state(0, episode)
         rAll = 0
         d = False
         j = 0
@@ -79,7 +79,7 @@ with tf.Session() as sess:
             if np.random.rand(1) < e:
                 a = env.random_sample_actions()
             #Get new state and reward from environment
-            s1,r,d,_ = env.step(a,index)
+            s1,r,d,_ = env.step(a,j)
             #Obtain the Q' values by feeding the new state through our network
             Q1 = sess.run(Qout,feed_dict={inputs1:s})
             #Obtain maxQ' and set our target value for chosen action.

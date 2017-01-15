@@ -13,7 +13,8 @@ import tensorflow as tf
 import tflearn
 import pandas as pd
 import ipdb
-from combine_network import make_asset_input, get_data_from_model
+from combine_network import make_asset_input, get_rescaled_value_from_model
+from pandas_helpers.pandas_series_helper import pandas_split_series_into_list
 
 # ====================
 #   Equity Environment 
@@ -24,28 +25,34 @@ class EquityEnvironment(object):
     Responsible for preprocessing screens and holding on to a screen buffer
     of size action_repeat from which environment state is constructed.
     """
-    def __init__(self, assets, look_back, episode_length, look_back_reinforcement, price_series):
+    def __init__(self, assets, look_back, episode_length, look_back_reinforcement, price_series, train):
         #think about it whether its needed or not
         self.action_repeat = 2
 
         self.gym_actions = range(len(assets)+1)
 
         self.look_back = look_back
-        self.data = pd.read_csv("data/all_data.csv")
-        self.numpy_data = self.data.as_matrix()
+        total_data = pd.read_csv("data/all_data.csv")
+        cut_index = int(total_data.shape[0]*0.8)
+        if train:
+            data = total_data[0:cut_index]
+        else:
+            data = total_data[cut_index:-1]
         self.look_back = look_back
-        self.assets_index = range(0, (len(self.gym_actions))*4, 4)[1:]
+        self.assets_index = range(0,(len(self.gym_actions))*4, 4)[1:]
         self.look_ahead = 1
         self.batch_size = 50    
         self.look_back_reinforcement = look_back_reinforcement
+        self.total_data = pandas_split_series_into_list(data, self.look_back+episode_length+1)
+        #ipdb.set_trace();
+        #self.numpy_data = self.data.as_matrix()
         self.price_series = price_series
         self.episode_length = episode_length
         self.models = make_asset_input(assets, look_back, self.look_ahead, self.batch_size)
-        self.state_buffer = deque()
+        #self.models = [0,1]
         self.assets = assets
 
-
-    def get_initial_state(self, index):
+    def get_initial_state(self, index, episode):
         """
         Resets the atari game, clears the state buffer.
         """
@@ -54,6 +61,8 @@ class EquityEnvironment(object):
         self.transaction_buffer = []
         self.initial_cash = 1000000
         self.cash = self.initial_cash
+        self.data = self.total_data[episode]
+        self.numpy_data = self.data.as_matrix()
         #zero in all assets + 100 percent in cash
         self.portfolio = [0] * (len(self.assets)) + [1]
         self.portfolio_quantity = [0] * (len(self.assets))
@@ -72,7 +81,8 @@ class EquityEnvironment(object):
         #print(index)
         assets_data = self.numpy_data[index:self.look_back+index][:,self.assets_index]
         for index, model in enumerate(self.models):
-            value =  get_data_from_model(model, assets_data[:,index])
+            value =  get_rescaled_value_from_model(model, assets_data[:,index])
+            #value = 2
             x.append(value)
             series_string = "ASSET_" + str(index+1) + "_CLOSE"
             temp = self.data[series_string].pct_change()[self.look_back+index-self.look_back_reinforcement:self.look_back+index]
