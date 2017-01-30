@@ -8,7 +8,7 @@ In the start, I will be using episode length of one day and price series data fo
 a) Make LSTM network for each asset and predict next interval price. All these networks are trained individually and trained network parameter is stored. (Code inside supervised learning) <br>  
 b) Use trained LSTM networks and with other layer combine the network and start training network using Reinforcement learning so second network predict allocation to each. 
 
-#Other thoughts on the projects are:
+#Other thoughts on the project are:
 a) Most of the financial engineering is about predicting the next price interval of the underlying asset. If you see first part that's what algorithm do it takes a supervised learning (made using LSTM) to predict that. This part can be separately optimised and made better in future. The more better it become the more better the algo will able to make portfolio. 
 <br>
 b) Second part making a portfolio using RL: This part takes input from first part and log returns of the price series to predict portfolio allocation. Idea here is that even knowing next price interval doesn't guarantee much, unless you can make a portfolio of different assets which can have less drawdown and consistent returns. <br>
