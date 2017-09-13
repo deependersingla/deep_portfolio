@@ -2,4 +2,4 @@
 /data/*.txt
 /data/*.csv
 /data/oneminutedata/
-/.idea/
+/.idea/vcs.xml
