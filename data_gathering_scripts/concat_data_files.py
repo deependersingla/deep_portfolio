@@ -12,7 +12,7 @@ for confn in concatfilename:
         for file in files:
             if str(confn + ".txt") in file:
                 new_files.append(os.path.join(path, file))
-                print os.path.join(path, file)
+                print(os.path.join(path, file))
     read_files = new_files
     with open(os.path.dirname(os.getcwd()) + "\\data\\" + confn + ".txt", "wb") as outfile:
         for f in read_files:
