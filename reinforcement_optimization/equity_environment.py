@@ -13,7 +13,7 @@ import tensorflow as tf
 import tflearn
 import pandas as pd
 import ipdb
-from combine_network import make_asset_input, get_rescaled_value_from_model
+from reinforcement_optimization.combine_network import make_asset_input, get_rescaled_value_from_model
 from pandas_helpers.pandas_series_helper import pandas_split_series_into_list
 
 # ====================
@@ -32,7 +32,7 @@ class EquityEnvironment(object):
         self.gym_actions = range(len(assets)+1)
 
         self.look_back = look_back
-        total_data = pd.read_csv("data/all_data.csv")
+        total_data = pd.read_csv("../data/all_data.csv")
         cut_index = int(total_data.shape[0]*0.8)
         if train:
             data = total_data[0:cut_index]

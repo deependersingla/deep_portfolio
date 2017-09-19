@@ -64,7 +64,7 @@ def prepare_data(df, look_back=20, look_ahead=1, n_aug=10, scale=0.1, split=(0.6
     print(testX.shape, testY.shape)
 
     return (trainX, trainY), (validX, validY), (testX, testY), (train_mean, train_sd), (valid_mean, valid_sd), (
-    test_mean, test_sd)
+        test_mean, test_sd)
 
 
 def prepare_data_for_trading_model(data, look_back):
@@ -164,7 +164,8 @@ def plot_result(predicted, testY):
 def load_model_tflearn(look_back, batch_size, asset):
     net = make_network(look_back, batch_size)
     model = tfl.DNN(net, tensorboard_dir="./logs_tb", tensorboard_verbose=0)
-    model.load("networks/" + asset + "/lstm3.tflearn")
+    filepath = os.path.split(os.path.realpath(__file__))[0]
+    model.load(filepath + "/networks/" + asset + "/lstm3.tflearn")
     return model
 
 
@@ -243,7 +244,8 @@ look_back = 200
 look_ahead = 1
 should_train_network = True
 batch_size = 50
-csv_file = ["data/NIFTY_sort.csv", "data/NIFTY_F1_sort.csv"]
+# filepath = os.path.dirname(os.getcwd())
+csv_file = ["../data/NIFTY_sort.csv", "../data/NIFTY_F1_sort.csv"]
 if __name__ == "__main__":
     for file in csv_file:
         asset = file.split("/")[-1]

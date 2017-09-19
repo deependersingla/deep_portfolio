@@ -10,7 +10,7 @@ from collections import deque
 
 import gym
 import tflearn
-from equity_environment import *
+from reinforcement_optimization.equity_environment import *
 import numpy as np
 import ipdb
 import tensorflow as tf

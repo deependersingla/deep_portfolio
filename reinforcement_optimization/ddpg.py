@@ -10,7 +10,7 @@ and developed with tflearn + Tensorflow
 BolierPlate code from here: https://github.com/pemami4911/deep-rl/blob/master/ddpg/ddpg.py
 """
 from __future__ import division, print_function, absolute_import
-from replay_buffer import ReplayBuffer
+from reinforcement_optimization.replay_buffer import ReplayBuffer
 import threading
 import random
 import numpy as np
@@ -21,7 +21,7 @@ from collections import deque
 
 import gym
 import tflearn
-from equity_environment import *
+from reinforcement_optimization.equity_environment import *
 import numpy as np
 import ipdb
 import tensorflow as tf
