@@ -14,6 +14,7 @@ from dateutil.relativedelta import relativedelta
 import collections
 import datetime
 import dateutil.parser
+from functools import reduce
 
 
 def export_time_series_data(files, usecols=6):

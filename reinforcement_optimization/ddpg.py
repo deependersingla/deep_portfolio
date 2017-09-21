@@ -32,9 +32,9 @@ import tensorflow as tf
 
 assets = ["NIFTY_F1_sort", "NIFTY_sort"]
 look_back_reinforcement = 10
-#currently just taking closing price but in future we can use ohlc
+# currently just taking closing price but in future we can use ohlc
 price_series = 1
-num_inputs = 2*len(assets) + look_back_reinforcement*price_series*len(assets) + 1
+num_inputs = 2 * len(assets) + look_back_reinforcement * price_series * len(assets) + 1
 num_actions = len(assets) + 1
 look_back = 200
 action_bound = 1
@@ -67,6 +67,7 @@ RANDOM_SEED = 1234
 BUFFER_SIZE = 10000
 MINIBATCH_SIZE = 64
 
+
 # ===========================
 #   Actor and Critic DNNs
 # ===========================
@@ -78,6 +79,7 @@ class ActorNetwork(object):
     The output layer activation is a tanh to keep the action
     between -2 and 2
     """
+
     def __init__(self, sess, state_dim, action_dim, action_bound, learning_rate, tau):
         self.sess = sess
         self.s_dim = state_dim
@@ -93,36 +95,36 @@ class ActorNetwork(object):
 
         # Target Network
         self.target_inputs, self.target_out, self.target_scaled_out = self.create_actor_network()
-        
+
         self.target_network_params = tf.trainable_variables()[len(self.network_params):]
 
         # Op for periodically updating target network with online network weights
         self.update_target_network_params = \
             [self.target_network_params[i].assign(tf.mul(self.network_params[i], self.tau) + \
-                tf.mul(self.target_network_params[i], 1. - self.tau))
-                for i in range(len(self.target_network_params))]
+                                                  tf.mul(self.target_network_params[i], 1. - self.tau))
+             for i in range(len(self.target_network_params))]
 
         # This gradient will be provided by the critic network
         self.action_gradient = tf.placeholder(tf.float32, [None, self.a_dim])
-        
+
         # Combine the gradients here 
         self.actor_gradients = tf.gradients(self.scaled_out, self.network_params, -self.action_gradient)
 
         # Optimization Op
-        self.optimize = tf.train.AdamOptimizer(self.learning_rate).\
+        self.optimize = tf.train.AdamOptimizer(self.learning_rate). \
             apply_gradients(zip(self.actor_gradients, self.network_params))
 
         self.num_trainable_vars = len(self.network_params) + len(self.target_network_params)
 
-    def create_actor_network(self): 
+    def create_actor_network(self):
         inputs = tflearn.input_data(shape=[None, self.s_dim])
         net = tflearn.fully_connected(inputs, 400, activation='relu')
         net = tflearn.fully_connected(net, 300, activation='relu')
         # Final layer weights are init to Uniform[-3e-3, 3e-3]
         w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
         out = tflearn.fully_connected(net, self.a_dim, activation='tanh', weights_init=w_init)
-        scaled_out = tf.mul(out, self.action_bound) # Scale output to -action_bound to action_bound
-        return inputs, out, scaled_out 
+        scaled_out = tf.mul(out, self.action_bound)  # Scale output to -action_bound to action_bound
+        return inputs, out, scaled_out
 
     def train(self, inputs, a_gradient):
         self.sess.run(self.optimize, feed_dict={
@@ -146,12 +148,14 @@ class ActorNetwork(object):
     def get_num_trainable_vars(self):
         return self.num_trainable_vars
 
+
 class CriticNetwork(object):
     """ 
     Input to the network is the state and action, output is Q(s,a).
     The action must be obtained from the output of the Actor network.
 
     """
+
     def __init__(self, sess, state_dim, action_dim, learning_rate, tau, num_actor_vars):
         self.sess = sess
         self.s_dim = state_dim
@@ -166,14 +170,15 @@ class CriticNetwork(object):
 
         # Target Network
         self.target_inputs, self.target_action, self.target_out = self.create_critic_network()
-        
+
         self.target_network_params = tf.trainable_variables()[(len(self.network_params) + num_actor_vars):]
 
         # Op for periodically updating target network with online network weights with regularization
         self.update_target_network_params = \
-            [self.target_network_params[i].assign(tf.mul(self.network_params[i], self.tau) + tf.mul(self.target_network_params[i], 1. - self.tau))
-                for i in range(len(self.target_network_params))]
-    
+            [self.target_network_params[i].assign(
+                tf.mul(self.network_params[i], self.tau) + tf.mul(self.target_network_params[i], 1. - self.tau))
+             for i in range(len(self.target_network_params))]
+
         # Network target (y_i)
         self.predicted_q_value = tf.placeholder(tf.float32, [None, 1])
 
@@ -198,7 +203,7 @@ class CriticNetwork(object):
         t1 = tflearn.fully_connected(net, 300)
         t2 = tflearn.fully_connected(action, 300)
 
-        net = tflearn.activation(tf.matmul(net,t1.W) + tf.matmul(action, t2.W) + t2.b, activation='relu')
+        net = tflearn.activation(tf.matmul(net, t1.W) + tf.matmul(action, t2.W) + t2.b, activation='relu')
 
         # linear layer connected to 1 output representing Q(s,a) 
         # Weights are init to Uniform[-3e-3, 3e-3]
@@ -225,7 +230,7 @@ class CriticNetwork(object):
             self.target_action: action
         })
 
-    def action_gradients(self, inputs, actions): 
+    def action_gradients(self, inputs, actions):
         return self.sess.run(self.action_grads, feed_dict={
             self.inputs: inputs,
             self.action: actions
@@ -234,10 +239,11 @@ class CriticNetwork(object):
     def update_target_network(self):
         self.sess.run(self.update_target_network_params)
 
+
 # ===========================
 #   Tensorflow Summary Ops
 # ===========================
-def build_summaries(): 
+def build_summaries():
     episode_reward = tf.Variable(0.)
     tf.scalar_summary("Reward", episode_reward)
     episode_ave_max_q = tf.Variable(0.)
@@ -248,11 +254,11 @@ def build_summaries():
 
     return summary_ops, summary_vars
 
+
 # ===========================
 #   Agent Training
 # ===========================
 def train(sess, env, actor, critic):
-
     # Set up summary Ops
     summary_ops, summary_vars = build_summaries()
 
@@ -266,25 +272,25 @@ def train(sess, env, actor, critic):
     # Initialize replay memory
     replay_buffer = ReplayBuffer(BUFFER_SIZE, RANDOM_SEED)
 
-    for i in xrange(MAX_EPISODES):
+    for i in range(MAX_EPISODES):
 
         s = env.get_initial_state(0, i)
         ep_reward = 0
         ep_ave_max_q = 0
 
-        for j in xrange(MAX_EP_STEPS):
+        for j in range(MAX_EP_STEPS):
 
             # Added exploration noise
             a = actor.predict(np.reshape(s, (1, 3))) + (1. / (1. + i + j))
 
-            s2, r, terminal, info = env.step(a[0],j)
+            s2, r, terminal, info = env.step(a[0], j)
 
             replay_buffer.add(np.reshape(s, (actor.s_dim,)), np.reshape(a, (actor.a_dim,)), r, \
-                terminal, np.reshape(s2, (actor.s_dim,)))
+                              terminal, np.reshape(s2, (actor.s_dim,)))
 
             # Keep adding experience to the memory until
             # there are at least minibatch size samples
-            if replay_buffer.size() > MINIBATCH_SIZE:     
+            if replay_buffer.size() > MINIBATCH_SIZE:
                 s_batch, a_batch, r_batch, t_batch, s2_batch = \
                     replay_buffer.sample_batch(MINIBATCH_SIZE)
 
@@ -292,7 +298,7 @@ def train(sess, env, actor, critic):
                 target_q = critic.predict_target(s2_batch, actor.predict_target(s2_batch))
 
                 y_i = []
-                for k in xrange(MINIBATCH_SIZE):
+                for k in range(MINIBATCH_SIZE):
                     if t_batch[k]:
                         y_i.append(r_batch[k])
                     else:
@@ -300,11 +306,11 @@ def train(sess, env, actor, critic):
 
                 # Update the critic given the targets
                 predicted_q_value, _ = critic.train(s_batch, a_batch, np.reshape(y_i, (MINIBATCH_SIZE, 1)))
-            
+
                 ep_ave_max_q += np.amax(predicted_q_value)
 
                 # Update the actor policy using the sampled gradient
-                a_outs = actor.predict(s_batch)                
+                a_outs = actor.predict(s_batch)
                 grads = critic.action_gradients(s_batch, a_outs)
                 actor.train(s_batch, grads[0])
 
@@ -316,7 +322,6 @@ def train(sess, env, actor, critic):
             ep_reward += r
 
             if terminal:
-
                 summary_str = sess.run(summary_ops, feed_dict={
                     summary_vars[0]: ep_reward,
                     summary_vars[1]: ep_ave_max_q / float(j)
@@ -325,13 +330,13 @@ def train(sess, env, actor, critic):
                 writer.add_summary(summary_str, i)
                 writer.flush()
 
-                #print '| Reward: %.2i' % int(ep_reward), " | Episode", i, '| Qmax: %.4f' % (ep_ave_max_q / float(j))
+                # print '| Reward: %.2i' % int(ep_reward), " | Episode", i, '| Qmax: %.4f' % (ep_ave_max_q / float(j))
                 break
+
 
 def main(_):
     with tf.Session() as sess:
-        
-        env = EquityEnvironment(assets,look_back, episode_length, look_back_reinforcement, price_series,train=True)
+        env = EquityEnvironment(assets, look_back, episode_length, look_back_reinforcement, price_series, train=True)
         np.random.seed(RANDOM_SEED)
         tf.set_random_seed(RANDOM_SEED)
 
@@ -339,15 +344,16 @@ def main(_):
         action_dim = num_actions
         action_bound = action_bound
         # Ensure action bound is symmetric
-        #assert (env.action_space.high == -env.action_space.low)
+        # assert (env.action_space.high == -env.action_space.low)
 
         actor = ActorNetwork(sess, state_dim, action_dim, action_bound, \
-            ACTOR_LEARNING_RATE, TAU)
+                             ACTOR_LEARNING_RATE, TAU)
 
         critic = CriticNetwork(sess, state_dim, action_dim, \
-            CRITIC_LEARNING_RATE, TAU, actor.get_num_trainable_vars())
+                               CRITIC_LEARNING_RATE, TAU, actor.get_num_trainable_vars())
 
         train(sess, env, actor, critic)
+
 
 if __name__ == '__main__':
     tf.app.run()
