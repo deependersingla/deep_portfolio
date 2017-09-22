@@ -38,13 +38,13 @@ def export_time_series_data(files, usecols=6):
         header += [file + "_" + str(s) for s in np.arange(usecols)]
         values = data_dict[file]
         d = dict((k, values[k]) for k in whitelisted_keys if k in values)
-        for k, v in d.iteritems():
+        for k, v in d.items():
             v = v[2:]
             v = v.astype(np.float)
             super_dict[k] += v.tolist()
     new_file_name = "all_data.csv"
     whitelisted_keys = sorted(whitelisted_keys, key=lambda x: dateutil.parser.parse(x))
-    with open(new_file_name, 'wb') as outfile:
+    with open(new_file_name, 'w') as outfile:
         writer = csv.writer(outfile)
         writer.writerow(header)
         for row in whitelisted_keys:

@@ -17,7 +17,7 @@ for filename in glob.glob(os.path.dirname(os.getcwd()) + "\\data\\*.txt"):
         data_dict[date_time] = row
     ordered = OrderedDict(sorted(data_dict.items(), key=lambda t: t[0]))
     new_file_name = filename.replace(".txt", "_sort.csv")
-    with open(new_file_name, 'wb') as outfile:
+    with open(new_file_name, 'w') as outfile:
         writer = csv.writer(outfile)
         writer.writerow(["DateTime", "index", "OPEN", "HIGH", "LOW", "CLOSE"])
         for row in ordered.items():

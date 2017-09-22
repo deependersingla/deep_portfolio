@@ -14,7 +14,7 @@ for confn in concatfilename:
                 new_files.append(os.path.join(path, file))
                 print(os.path.join(path, file))
     read_files = new_files
-    with open(os.path.dirname(os.getcwd()) + "\\data\\" + confn + ".txt", "wb") as outfile:
+    with open(os.path.dirname(os.getcwd()) + "\\data\\" + confn + ".txt", "w") as outfile:
         for f in read_files:
-            with open(f, "rb") as infile:
+            with open(f, "r") as infile:
                 outfile.write(infile.read())
