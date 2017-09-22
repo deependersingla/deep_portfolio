@@ -37,7 +37,8 @@ price_series = 1
 num_inputs = 2 * len(assets) + look_back_reinforcement * price_series * len(assets) + 1
 num_actions = len(assets) + 1
 look_back = 200
-action_bound = 1
+num_action_bound = 1
+episode_length = 300
 
 # ==========================
 #   Training Parameters
@@ -123,7 +124,7 @@ class ActorNetwork(object):
         # Final layer weights are init to Uniform[-3e-3, 3e-3]
         w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
         out = tflearn.fully_connected(net, self.a_dim, activation='tanh', weights_init=w_init)
-        scaled_out = tf.mul(out, self.action_bound)  # Scale output to -action_bound to action_bound
+        scaled_out = tf.multiply(out, self.action_bound)  # Scale output to -action_bound to action_bound
         return inputs, out, scaled_out
 
     def train(self, inputs, a_gradient):
@@ -177,7 +178,7 @@ class CriticNetwork(object):
         self.update_target_network_params = \
             [self.target_network_params[i].assign(
                 tf.mul(self.network_params[i], self.tau) + tf.mul(self.target_network_params[i], 1. - self.tau))
-             for i in range(len(self.target_network_params))]
+                for i in range(len(self.target_network_params))]
 
         # Network target (y_i)
         self.predicted_q_value = tf.placeholder(tf.float32, [None, 1])
@@ -342,7 +343,7 @@ def main(_):
 
         state_dim = num_inputs
         action_dim = num_actions
-        action_bound = action_bound
+        action_bound = num_action_bound
         # Ensure action bound is symmetric
         # assert (env.action_space.high == -env.action_space.low)
 
@@ -356,4 +357,4 @@ def main(_):
 
 
 if __name__ == '__main__':
-    tf.app.run()
+    tf.app.run(main)
