@@ -101,8 +101,8 @@ class ActorNetwork(object):
 
         # Op for periodically updating target network with online network weights
         self.update_target_network_params = \
-            [self.target_network_params[i].assign(tf.mul(self.network_params[i], self.tau) + \
-                                                  tf.mul(self.target_network_params[i], 1. - self.tau))
+            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) + \
+                                                  tf.multiply(self.target_network_params[i], 1. - self.tau))
              for i in range(len(self.target_network_params))]
 
         # This gradient will be provided by the critic network
@@ -177,7 +177,7 @@ class CriticNetwork(object):
         # Op for periodically updating target network with online network weights with regularization
         self.update_target_network_params = \
             [self.target_network_params[i].assign(
-                tf.mul(self.network_params[i], self.tau) + tf.mul(self.target_network_params[i], 1. - self.tau))
+                tf.multiply(self.network_params[i], self.tau) + tf.multiply(self.target_network_params[i], 1. - self.tau))
                 for i in range(len(self.target_network_params))]
 
         # Network target (y_i)
