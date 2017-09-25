@@ -246,12 +246,12 @@ class CriticNetwork(object):
 # ===========================
 def build_summaries():
     episode_reward = tf.Variable(0.)
-    tf.scalar_summary("Reward", episode_reward)
+    tf.summary.scalar("Reward", episode_reward)
     episode_ave_max_q = tf.Variable(0.)
-    tf.scalar_summary("Qmax Value", episode_ave_max_q)
+    tf.summary.scalar("Qmax Value", episode_ave_max_q)
 
     summary_vars = [episode_reward, episode_ave_max_q]
-    summary_ops = tf.merge_all_summaries()
+    summary_ops = tf.summary.merge_all()
 
     return summary_ops, summary_vars
 
