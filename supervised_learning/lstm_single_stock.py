@@ -12,6 +12,7 @@ import csv
 import pandas
 import os
 
+
 def create_timeseries_dataset(X, look_back, look_ahead):
     """
     X is 1D numpy array of timeseries data
@@ -19,9 +20,9 @@ def create_timeseries_dataset(X, look_back, look_ahead):
     """
     dataX, dataY = [], []
     means, sd = [], []
-    for i in range(look_back+look_ahead, X.shape[0]):
+    for i in range(look_back + look_ahead, X.shape[0]):
         # make sliding window of length look_back + look_ahead
-        window = X[(i-look_back-look_ahead):i]
+        window = X[(i - look_back - look_ahead):i]
         just_duplicate = window
         # calculate mean and std deviation of first look_back elements
         wm = window[:-look_ahead].mean()
@@ -40,8 +41,6 @@ def create_timeseries_dataset(X, look_back, look_ahead):
     return means, sd, data.reshape((data.shape[0], data.shape[1], 1)), target.reshape((target.shape[0], 1))
 
 
-
-
 def prepare_data(df, look_back=20, look_ahead=1, n_aug=10, scale=0.1, split=(0.6, 0.2, 0.2)):
     """
     df is a pandas series containing prices
@@ -55,23 +54,23 @@ def prepare_data(df, look_back=20, look_ahead=1, n_aug=10, scale=0.1, split=(0.6
 
     # reshape into X=t and Y=t+1
     train_mean, train_sd, trainX, trainY = create_timeseries_dataset(df.values[:train_size], look_back, look_ahead)
-    valid_mean, valid_sd, validX, validY = create_timeseries_dataset(df.values[train_size:(train_size+valid_size)], look_back, look_ahead)
+    valid_mean, valid_sd, validX, validY = create_timeseries_dataset(df.values[train_size:(train_size + valid_size)],
+                                                                     look_back, look_ahead)
     test_mean, test_sd, testX, testY = create_timeseries_dataset(df.values[-test_size:], look_back, look_ahead)
 
-    
-    print train_size, valid_size, test_size
-    print trainX.shape, trainY.shape
-    print validX.shape, validY.shape
-    print testX.shape, testY.shape
+    print(train_size, valid_size, test_size)
+    print(trainX.shape, trainY.shape)
+    print(validX.shape, validY.shape)
+    print(testX.shape, testY.shape)
 
-    return (trainX, trainY), (validX, validY), (testX, testY), (train_mean, train_sd), (valid_mean, valid_sd), (test_mean, test_sd)
+    return (trainX, trainY), (validX, validY), (testX, testY), (train_mean, train_sd), (valid_mean, valid_sd), (
+        test_mean, test_sd)
+
 
 def prepare_data_for_trading_model(data, look_back):
-    #todo rewrite code to support look_ahead with None
+    # todo rewrite code to support look_ahead with None
     test_mean, test_sd, testX, testY = create_timeseries_dataset(data, look_back=look_back, look_ahead=0)
     return test_mean, test_sd, testX, testY
-
-
 
 
 def make_network(look_back, batch_size):
@@ -88,10 +87,11 @@ def make_network(look_back, batch_size):
     # net = tfl.dropout(net, 0.5)
 
     net = tfl.fully_connected(net, 1, activation='linear', name='Linear')
-    net = tfl.regression(net, batch_size=batch_size, optimizer='adam', learning_rate=0.005, loss='mean_square', name='target')
+    net = tfl.regression(net, batch_size=batch_size, optimizer='adam', learning_rate=0.005, loss='mean_square',
+                         name='target')
     col = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
     for x in col:
-        tf.add_to_collection(tf.GraphKeys.VARIABLES, x ) 
+        tf.add_to_collection(tf.GraphKeys.VARIABLES, x)
     return net
 
 
@@ -117,7 +117,6 @@ def train_network(net, epochs, train, valid, asset):
 
 def forecast_one(model, train, valid, test,
                  train_scale, valid_scale, test_scale):
-
     # Make 1-step forecasts
     trained = model.predict(train[0])
     validated = model.predict(valid[0])
@@ -140,18 +139,16 @@ def forecast_one(model, train, valid, test,
     mse1 = mean_absolute_error(trainY, trained)
     mse2 = mean_absolute_error(validY, validated)
     mse3 = mean_absolute_error(testY, predicted)
-    print ("Mean Absolue Error (MAE) train: %f" % mse1)
-    print ("Mean Absolue Error (MAE) valid: %f" % mse2)
-    print ("Mean Absolue Error (MAE) test:  %f" % mse3)
+    print("Mean Absolue Error (MAE) train: %f" % mse1)
+    print("Mean Absolue Error (MAE) valid: %f" % mse2)
+    print("Mean Absolue Error (MAE) test:  %f" % mse3)
     return predicted, testY, (mse1, mse2, mse3)
-
 
 
 def clean_up(net, model):
     del model
     del net
     tf.reset_default_graph()
-
 
 
 def plot_result(predicted, testY):
@@ -163,11 +160,14 @@ def plot_result(predicted, testY):
     plt.legend(handles=[plot_predicted, plot_test])
     plt.show()
 
+
 def load_model_tflearn(look_back, batch_size, asset):
     net = make_network(look_back, batch_size)
     model = tfl.DNN(net, tensorboard_dir="./logs_tb", tensorboard_verbose=0)
-    model.load("networks/" + asset + "/lstm3.tflearn")
+    filepath = os.path.split(os.path.realpath(__file__))[0]
+    model.load(filepath + "/networks/" + asset + "/lstm3.tflearn")
     return model
+
 
 def forecast_model(data, model, test_sd, test_mean):
     predicted = model.predict(data)
@@ -175,9 +175,11 @@ def forecast_model(data, model, test_sd, test_mean):
     predicted = predicted * test_sd + test_mean
     return predicted
 
+
 def read_from_csv(sheet):
     data = pandas.read_csv(sheet)
     return data["CLOSE"][0:5000]
+
 
 def run_real_time(data, model, look_back):
     window = data[-look_back:]
@@ -185,25 +187,26 @@ def run_real_time(data, model, look_back):
     sd = window.std()
     # rescale entire window
     window = (window - mean) / sd
-    input_data = window.reshape(1,look_back,1)
+    input_data = window.reshape(1, look_back, 1)
     value = model.predict(input_data)
-    return value[0][0]*sd+mean
+    return value[0][0] * sd + mean
 
 
 def generate_supervised_network(csv_file, asset):
     if use_csv:
-        #TODO don't use absolute path
+        # TODO don't use absolute path
         df = read_from_csv(csv_file)
     else:
-       start = datetime.datetime(1990, 1, 1)
-       end = datetime.datetime(2016, 10, 28)
-       data = web.DataReader("^GSPC", 'yahoo', start, end)
-       df = data['Adj Close']
+        start = datetime.datetime(1990, 1, 1)
+        end = datetime.datetime(2016, 10, 28)
+        data = web.DataReader("^GSPC", 'yahoo', start, end)
+        df = data['Adj Close']
 
     # set batch parameters
     if should_train_network:
         # set tensor flow params, including random seed
-        train, valid, test, train_scale, valid_scale, test_scale = prepare_data(df, look_back, look_ahead, n_aug=10, scale=0.1, split=split)
+        train, valid, test, train_scale, valid_scale, test_scale = prepare_data(df, look_back, look_ahead, n_aug=10,
+                                                                                scale=0.1, split=split)
         # set tensor flow params, including random seed
         tfl.config.init_graph(seed=765)
 
@@ -213,23 +216,26 @@ def generate_supervised_network(csv_file, asset):
 
         # calculate errors
         predicted, testY_scaled, errors = forecast_one(model, train, valid, test,
-                                                   train_scale, valid_scale, test_scale)
+                                                       train_scale, valid_scale, test_scale)
 
-        #plot_result(predicted, testY_scaled)
+        # plot_result(predicted, testY_scaled)
 
-        print "DEEP METRICS, PLEASE IGNORE:"
-        #TODO -- double check below logic
-        true = np.where((testY_scaled[1:] - testY_scaled[:-1])<= 0, 0, 1)
-        predicted = np.where((predicted[1:] - testY_scaled[:-1])<= 0, 0, 1)
+        print
+        "DEEP METRICS, PLEASE IGNORE:"
+        # TODO -- double check below logic
+        true = np.where((testY_scaled[1:] - testY_scaled[:-1]) <= 0, 0, 1)
+        predicted = np.where((predicted[1:] - testY_scaled[:-1]) <= 0, 0, 1)
         result = tf_metrics(true, predicted)
-        print "\n--- out of sample stats ---"
+        print
+        "\n--- out of sample stats ---"
         print('Accuracy  %.3f' % (result["accuracy"]))
         print('Precision %.3f' % (result["precision"]))
         print('Recall    %.3f' % (result["recall"]))
         print('\nConfusion Matrix')
-        print result["confusion_matrix"]
+        print
+        result["confusion_matrix"]
         clean_up(net, model)
- 
+
 
 epochs = 1
 split = (0.8, 0.1, 0.1)
@@ -238,11 +244,12 @@ look_back = 200
 look_ahead = 1
 should_train_network = True
 batch_size = 50
-csv_file = ["data/NIFTY_sort.csv", "data/NIFTY_F1_sort.csv"]
+# filepath = os.path.dirname(os.getcwd())
+csv_file = ["../data/NIFTY_sort.csv", "../data/NIFTY_F1_sort.csv"]
 if __name__ == "__main__":
     for file in csv_file:
         asset = file.split("/")[-1]
-        asset =  asset.replace(".csv",'')
+        asset = asset.replace(".csv", '')
         generate_supervised_network(file, asset)
 
-    #the trading model code can be copied later
+        # the trading model code can be copied later

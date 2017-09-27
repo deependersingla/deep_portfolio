@@ -1,84 +1,37 @@
-""" 
+"""
 Implementation of DDPG - Deep Deterministic Policy Gradient
 
-Algorithm and hyperparameter details can be found here: 
+Algorithm and hyperparameter details can be found here:
     http://arxiv.org/pdf/1509.02971v2.pdf
 
-The algorithm is tested on the Pendulum-v0 OpenAI gym task 
+The algorithm is tested on the Pendulum-v0 OpenAI gym task
 and developed with tflearn + Tensorflow
 
-BolierPlate code from here: https://github.com/pemami4911/deep-rl/blob/master/ddpg/ddpg.py
+Author: Patrick Emami
 """
-from __future__ import division, print_function, absolute_import
-from reinforcement_optimization.replay_buffer import ReplayBuffer
-import threading
-import random
-import numpy as np
-import time
-from skimage.transform import resize
-from skimage.color import rgb2gray
-from collections import deque
-
-import gym
-import tflearn
-from reinforcement_optimization.equity_environment import *
-import numpy as np
-import ipdb
 import tensorflow as tf
+import numpy as np
+import gym
+from gym import wrappers
+import tflearn
+import argparse
+import pprint as pp
 
-# ==========================
-#   Model Parameters
-# ==========================
-
-assets = ["NIFTY_F1_sort", "NIFTY_sort"]
-look_back_reinforcement = 10
-# currently just taking closing price but in future we can use ohlc
-price_series = 1
-num_inputs = 2 * len(assets) + look_back_reinforcement * price_series * len(assets) + 1
-num_actions = len(assets) + 1
-look_back = 200
-num_action_bound = 1
-episode_length = 300
-
-# ==========================
-#   Training Parameters
-# ==========================
-# Max training steps
-MAX_EPISODES = 5
-# Max episode length
-MAX_EP_STEPS = 300
-# Base learning rate for the Actor network
-ACTOR_LEARNING_RATE = 0.0001
-# Base learning rate for the Critic Network
-CRITIC_LEARNING_RATE = 0.001
-# Discount factor 
-GAMMA = 0.99
-# Soft target update param
-TAU = 0.001
-
-# ===========================
-#   Utility Parameters
-# ===========================
-# Directory for storing gym results
-MONITOR_DIR = './results/gym_ddpg'
-# Directory for storing tensorboard summary results
-SUMMARY_DIR = './results/tf_ddpg'
-RANDOM_SEED = 1234
-# Size of replay buffer
-BUFFER_SIZE = 10000
-MINIBATCH_SIZE = 64
+from reinforcement_optimization.replay_buffer import ReplayBuffer
+from reinforcement_optimization.equity_environment import *
 
 
 # ===========================
 #   Actor and Critic DNNs
 # ===========================
+
 class ActorNetwork(object):
-    """ 
+    """
     Input to the network is the state, output is the action
     under a deterministic policy.
 
     The output layer activation is a tanh to keep the action
-    between -2 and 2
+    between -action_bound and action_bound
     """
 
     def __init__(self, sess, state_dim, action_dim, action_bound, learning_rate, tau):
@@ -97,34 +50,44 @@ class ActorNetwork(object):
         # Target Network
         self.target_inputs, self.target_out, self.target_scaled_out = self.create_actor_network()
 
-        self.target_network_params = tf.trainable_variables()[len(self.network_params):]
+        self.target_network_params = tf.trainable_variables()[
+                                     len(self.network_params):]
 
-        # Op for periodically updating target network with online network weights
+        # Op for periodically updating target network with online network
+        # weights
         self.update_target_network_params = \
-            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) + \
+            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) +
                                                   tf.multiply(self.target_network_params[i], 1. - self.tau))
              for i in range(len(self.target_network_params))]
 
         # This gradient will be provided by the critic network
         self.action_gradient = tf.placeholder(tf.float32, [None, self.a_dim])
 
-        # Combine the gradients here 
-        self.actor_gradients = tf.gradients(self.scaled_out, self.network_params, -self.action_gradient)
+        # Combine the gradients here
+        self.actor_gradients = tf.gradients(
+            self.scaled_out, self.network_params, -self.action_gradient)
 
         # Optimization Op
         self.optimize = tf.train.AdamOptimizer(self.learning_rate). \
             apply_gradients(zip(self.actor_gradients, self.network_params))
 
-        self.num_trainable_vars = len(self.network_params) + len(self.target_network_params)
+        self.num_trainable_vars = len(
+            self.network_params) + len(self.target_network_params)
 
     def create_actor_network(self):
         inputs = tflearn.input_data(shape=[None, self.s_dim])
-        net = tflearn.fully_connected(inputs, 400, activation='relu')
-        net = tflearn.fully_connected(net, 300, activation='relu')
+        net = tflearn.fully_connected(inputs, 400)
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
+        net = tflearn.fully_connected(net, 300)
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
         # Final layer weights are init to Uniform[-3e-3, 3e-3]
         w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
-        out = tflearn.fully_connected(net, self.a_dim, activation='tanh', weights_init=w_init)
-        scaled_out = tf.multiply(out, self.action_bound)  # Scale output to -action_bound to action_bound
+        out = tflearn.fully_connected(
+            net, self.a_dim, activation='tanh', weights_init=w_init)
+        # Scale output to -action_bound to action_bound
+        scaled_out = tf.multiply(out, self.action_bound)
         return inputs, out, scaled_out
 
     def train(self, inputs, a_gradient):
@@ -151,18 +114,19 @@ class ActorNetwork(object):
 
 
 class CriticNetwork(object):
-    """ 
+    """
     Input to the network is the state and action, output is Q(s,a).
     The action must be obtained from the output of the Actor network.
 
     """
 
-    def __init__(self, sess, state_dim, action_dim, learning_rate, tau, num_actor_vars):
+    def __init__(self, sess, state_dim, action_dim, learning_rate, tau, gamma, num_actor_vars):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
         self.learning_rate = learning_rate
         self.tau = tau
+        self.gamma = gamma
 
         # Create the critic network
         self.inputs, self.action, self.out = self.create_critic_network()
@@ -174,40 +138,44 @@ class CriticNetwork(object):
 
         self.target_network_params = tf.trainable_variables()[(len(self.network_params) + num_actor_vars):]
 
-        # Op for periodically updating target network with online network weights with regularization
+        # Op for periodically updating target network with online network
+        # weights with regularization
         self.update_target_network_params = \
-            [self.target_network_params[i].assign(
-                tf.multiply(self.network_params[i], self.tau) + tf.multiply(self.target_network_params[i],
-                                                                            1. - self.tau))
-                for i in range(len(self.target_network_params))]
+            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) \
+                                                  + tf.multiply(self.target_network_params[i], 1. - self.tau))
+             for i in range(len(self.target_network_params))]
 
         # Network target (y_i)
         self.predicted_q_value = tf.placeholder(tf.float32, [None, 1])
 
         # Define loss and optimization Op
         self.loss = tflearn.mean_square(self.predicted_q_value, self.out)
-        self.optimize = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+        self.optimize = tf.train.AdamOptimizer(
+            self.learning_rate).minimize(self.loss)
 
         # Get the gradient of the net w.r.t. the action.
         # For each action in the minibatch (i.e., for each x in xs),
-        # this will sum up the gradients of each critic output in the minibatch 
-        # w.r.t. that action (i.e., sum of dy/dx over all ys). We then divide
-        # through by the minibatch size to scale the gradients down correctly.
-        self.action_grads = tf.div(tf.gradients(self.out, self.action), tf.constant(MINIBATCH_SIZE, dtype=tf.float32))
+        # this will sum up the gradients of each critic output in the minibatch
+        # w.r.t. that action. Each output is independent of all
+        # actions except for one.
+        self.action_grads = tf.gradients(self.out, self.action)
 
     def create_critic_network(self):
         inputs = tflearn.input_data(shape=[None, self.s_dim])
         action = tflearn.input_data(shape=[None, self.a_dim])
-        net = tflearn.fully_connected(inputs, 400, activation='relu')
+        net = tflearn.fully_connected(inputs, 400)
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
 
         # Add the action tensor in the 2nd hidden layer
         # Use two temp layers to get the corresponding weights and biases
         t1 = tflearn.fully_connected(net, 300)
         t2 = tflearn.fully_connected(action, 300)
 
-        net = tflearn.activation(tf.matmul(net, t1.W) + tf.matmul(action, t2.W) + t2.b, activation='relu')
+        net = tflearn.activation(
+            tf.matmul(net, t1.W) + tf.matmul(action, t2.W) + t2.b, activation='relu')
 
-        # linear layer connected to 1 output representing Q(s,a) 
+        # linear layer connected to 1 output representing Q(s,a)
         # Weights are init to Uniform[-3e-3, 3e-3]
         w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
         out = tflearn.fully_connected(net, 1, weights_init=w_init)
@@ -269,6 +237,7 @@ class OrnsteinUhlenbeckActionNoise:
 # ===========================
 #   Tensorflow Summary Ops
 # ===========================
+
 def build_summaries():
     episode_reward = tf.Variable(0.)
     tf.summary.scalar("Reward", episode_reward)
@@ -284,55 +253,63 @@ def build_summaries():
 # ===========================
 #   Agent Training
 # ===========================
-def train(sess, env, actor, critic, actor_noise):
+
+def train(sess, env, args, actor, critic, actor_noise):
     # Set up summary Ops
     summary_ops, summary_vars = build_summaries()
 
-    sess.run(tf.initialize_all_variables())
-    writer = tf.summary.FileWriter(SUMMARY_DIR, sess.graph)
+    sess.run(tf.global_variables_initializer())
+    writer = tf.summary.FileWriter(args['summary_dir'], sess.graph)
 
     # Initialize target network weights
     actor.update_target_network()
     critic.update_target_network()
 
     # Initialize replay memory
-    replay_buffer = ReplayBuffer(BUFFER_SIZE, RANDOM_SEED)
+    replay_buffer = ReplayBuffer(int(args['buffer_size']), int(args['random_seed']))
 
-    for i in range(MAX_EPISODES):
+    for i in range(int(args['max_episodes'])):
 
+        # s = env.reset()
         s = env.get_initial_state(0, i)
+
         ep_reward = 0
         ep_ave_max_q = 0
 
-        for j in range(MAX_EP_STEPS):
+        for j in range(int(args['max_episode_len'])):
+
+            if args['render_env']:
+                env.render()
 
             # Added exploration noise
-            # a = actor.predict(np.reshape(s, (1, 3))) + (1. / (1. + i + j))
+            # a = actor.predict(np.reshape(s, (1, 3))) + (1. / (1. + i))
             a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
 
             s2, r, terminal, info = env.step(a[0], j)
 
-            replay_buffer.add(np.reshape(s, (actor.s_dim,)), np.reshape(a, (actor.a_dim,)), r, \
+            replay_buffer.add(np.reshape(s, (actor.s_dim,)), np.reshape(a, (actor.a_dim,)), r,
                               terminal, np.reshape(s2, (actor.s_dim,)))
 
             # Keep adding experience to the memory until
             # there are at least minibatch size samples
-            if replay_buffer.size() > MINIBATCH_SIZE:
+            if replay_buffer.size() > int(args['minibatch_size']):
                 s_batch, a_batch, r_batch, t_batch, s2_batch = \
-                    replay_buffer.sample_batch(MINIBATCH_SIZE)
+                    replay_buffer.sample_batch(int(args['minibatch_size']))
 
                 # Calculate targets
-                target_q = critic.predict_target(s2_batch, actor.predict_target(s2_batch))
+                target_q = critic.predict_target(
+                    s2_batch, actor.predict_target(s2_batch))
 
                 y_i = []
-                for k in range(MINIBATCH_SIZE):
+                for k in range(int(args['minibatch_size'])):
                     if t_batch[k]:
                         y_i.append(r_batch[k])
                     else:
-                        y_i.append(r_batch[k] + GAMMA * target_q[k])
+                        y_i.append(r_batch[k] + critic.gamma * target_q[k])
 
                 # Update the critic given the targets
-                predicted_q_value, _ = critic.train(s_batch, a_batch, np.reshape(y_i, (MINIBATCH_SIZE, 1)))
+                predicted_q_value, _ = critic.train(
+                    s_batch, a_batch, np.reshape(y_i, (int(args['minibatch_size']), 1)))
 
                 ep_ave_max_q += np.amax(predicted_q_value)
 
@@ -357,32 +334,88 @@ def train(sess, env, actor, critic, actor_noise):
                 writer.add_summary(summary_str, i)
                 writer.flush()
 
-                # print '| Reward: %.2i' % int(ep_reward), " | Episode", i, '| Qmax: %.4f' % (ep_ave_max_q / float(j))
+                print('| Reward: {:d} | Episode: {:d} | Qmax: {:.4f}'.format(int(ep_reward), \
+                                                                             i, (ep_ave_max_q / float(j))))
                 break
 
 
-def main(_):
+def main(args):
     with tf.Session() as sess:
-        env = EquityEnvironment(assets, look_back, episode_length, look_back_reinforcement, price_series, train=True)
-        np.random.seed(RANDOM_SEED)
-        tf.set_random_seed(RANDOM_SEED)
+        assets = ["NIFTY_F1_sort", "NIFTY_sort"]
+        look_back_reinforcement = 10
+        # currently just taking closing price but in future we can use ohlc
+        price_series = 1
+        num_inputs = 2 * len(assets) + look_back_reinforcement * price_series * len(assets) + 1
+        num_actions = len(assets) + 1
+        look_back = 200
+        num_action_bound = 1
+        episode_length = 300
 
         state_dim = num_inputs
         action_dim = num_actions
         action_bound = num_action_bound
+        env = EquityEnvironment(assets, look_back, episode_length, look_back_reinforcement, price_series, train=True)
+
+        # env = gym.make(args['env'])
+        np.random.seed(int(args['random_seed']))
+        tf.set_random_seed(int(args['random_seed']))
+        # env.seed(int(args['random_seed']))
+
+        # state_dim = env.observation_space.shape[0]
+        # action_dim = env.action_space.shape[0]
+        # action_bound = env.action_space.high
         # Ensure action bound is symmetric
         # assert (env.action_space.high == -env.action_space.low)
 
-        actor = ActorNetwork(sess, state_dim, action_dim, action_bound, \
-                             ACTOR_LEARNING_RATE, TAU)
+        actor = ActorNetwork(sess, state_dim, action_dim, action_bound,
+                             float(args['actor_lr']), float(args['tau']))
 
-        critic = CriticNetwork(sess, state_dim, action_dim, \
-                               CRITIC_LEARNING_RATE, TAU, actor.get_num_trainable_vars())
+        critic = CriticNetwork(sess, state_dim, action_dim,
+                               float(args['critic_lr']), float(args['tau']),
+                               float(args['gamma']),
+                               actor.get_num_trainable_vars())
 
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
 
-        train(sess, env, actor, critic, actor_noise)
+        # if args['use_gym_monitor']:
+        #     if not args['render_env']:
+        #         env = wrappers.Monitor(
+        #             env, args['monitor_dir'], video_callable=False, force=True)
+        #     else:
+        #         env = wrappers.Monitor(env, args['monitor_dir'], force=True)
+
+        train(sess, env, args, actor, critic, actor_noise)
+
+        if args['use_gym_monitor']:
+            env.monitor.close()
 
 
 if __name__ == '__main__':
-    tf.app.run(main)
+    parser = argparse.ArgumentParser(description='provide arguments for DDPG agent')
+
+    # agent parameters
+    parser.add_argument('--actor-lr', help='actor network learning rate', default=0.0001)
+    parser.add_argument('--critic-lr', help='critic network learning rate', default=0.001)
+    parser.add_argument('--gamma', help='discount factor for critic updates', default=0.99)
+    parser.add_argument('--tau', help='soft target update parameter', default=0.001)
+    parser.add_argument('--buffer-size', help='max size of the replay buffer', default=1000000)
+    parser.add_argument('--minibatch-size', help='size of minibatch for minibatch-SGD', default=64)
+
+    # run parameters
+    parser.add_argument('--env', help='choose the gym env- tested on {Pendulum-v0}', default='Pendulum-v0')
+    parser.add_argument('--random-seed', help='random seed for repeatability', default=1234)
+    parser.add_argument('--max-episodes', help='max num of episodes to do while training', default=50000)
+    parser.add_argument('--max-episode-len', help='max length of 1 episode', default=1000)
+    parser.add_argument('--render-env', help='render the gym env', action='store_true')
+    parser.add_argument('--use-gym-monitor', help='record gym results', action='store_true')
+    parser.add_argument('--monitor-dir', help='directory for storing gym results', default='./results/gym_ddpg')
+    parser.add_argument('--summary-dir', help='directory for storing tensorboard info', default='./results/tf_ddpg')
+
+    parser.set_defaults(render_env=False)
+    parser.set_defaults(use_gym_monitor=True)
+
+    args = vars(parser.parse_args())
+
+    pp.pprint(args)
+
+    main(args)
